@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no">
+  <meta name="theme-color" content="#0f766e">
+  <title>GestHôte</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="app"><div class="splash"><div class="logo">🏠</div></div></div>
+  <script type="module" src="app.js"></script>
+  <script>
+    // Version installée + repo PUBLIC de releases interrogé par update-check.js.
+    // Code source privé (laurentsar/gesthote) ; APK/versions publiés sur
+    // laurentsar/gesthote-releases (public) par le CI.
+    const APP_VERSION = '1.0.0';
+    window.APP_VERSION = APP_VERSION;
+    window.UPDATE_REPO = 'laurentsar/gesthote-releases';
+
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('sw.js').catch(() => {});
+      let swRefreshing = false;
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if (!swRefreshing) { swRefreshing = true; window.location.reload(); }
+      });
+    }
+  </script>
+  <script src="update-check.js" defer></script>
+</body>
+</html>

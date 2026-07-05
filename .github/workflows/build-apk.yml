@@ -1,0 +1,142 @@
+name: Build Android APK
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Setup JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install JS deps
+        run: npm install --no-audit --no-fund
+
+      - name: Initialize Capacitor Android platform (first build only)
+        run: |
+          if [ ! -d android ]; then
+            npx cap add android
+          fi
+
+      - name: Generate stable signing keystore (first build only)
+        run: |
+          if [ ! -f android/app/gesthote.p12 ]; then
+            keytool -genkeypair -v -keystore android/app/gesthote.p12 -storetype PKCS12 \
+              -alias gesthote -keyalg RSA -keysize 2048 -validity 10000 \
+              -storepass gesthote -keypass gesthote \
+              -dname "CN=GestHote, O=Laurent, C=FR"
+            echo "NEW_KS=1" >> "$GITHUB_ENV"
+          fi
+
+      - name: Configure release signing
+        run: |
+          GRADLE=android/app/build.gradle
+          if ! grep -q "gesthote.p12" "$GRADLE"; then
+            python3 - "$GRADLE" <<'PY'
+import re, sys
+p = sys.argv[1]
+s = open(p).read()
+signing = '''    signingConfigs {
+        release {
+            storeFile file('gesthote.p12')
+            storePassword 'gesthote'
+            keyAlias 'gesthote'
+            keyPassword 'gesthote'
+            storeType 'PKCS12'
+        }
+    }
+'''
+s = s.replace('    buildTypes {', signing + '    buildTypes {', 1)
+s = re.sub(r'(release \{)', r'\1\n            signingConfig signingConfigs.release', s, count=1)
+open(p, 'w').write(s)
+PY
+          fi
+
+      - name: Sync versionName from www/version.json
+        run: |
+          VER=$(python3 -c "import json;print(json.load(open('www/version.json'))['version'])")
+          python3 - "$VER" <<'PY'
+import re, sys
+ver = sys.argv[1]
+p = 'android/app/build.gradle'
+s = open(p).read()
+s = re.sub(r'versionName\s+"[^"]*"', 'versionName "%s"' % ver, s, count=1)
+open(p, 'w').write(s)
+print("versionName ->", ver)
+PY
+
+      - name: Sync Capacitor (Android)
+        run: npx cap sync android
+
+      - name: Make gradlew executable
+        run: chmod +x android/gradlew
+
+      - name: Build release APK (signed)
+        working-directory: android
+        run: ./gradlew assembleRelease --no-daemon
+
+      - name: Read app version
+        id: version
+        run: |
+          VERSION=$(grep -oP 'versionName\s+"\K[^"]+' android/app/build.gradle)
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Rename APK with version
+        run: cp android/app/build/outputs/apk/release/app-release.apk "gesthote-${{ steps.version.outputs.version }}.apk"
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: gesthote-release-apk
+          path: gesthote-${{ steps.version.outputs.version }}.apk
+          if-no-files-found: error
+
+      - name: Create / update GitHub Release
+        if: github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.version.outputs.version }}
+          name: "GestHôte v${{ steps.version.outputs.version }}"
+          files: gesthote-${{ steps.version.outputs.version }}.apk
+          fail_on_unmatched_files: true
+          generate_release_notes: true
+
+      - name: Publish public release (gesthote-releases)
+        if: github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main'
+        uses: softprops/action-gh-release@v2
+        with:
+          repository: laurentsar/gesthote-releases
+          token: ${{ secrets.RELEASE_PAT }}
+          tag_name: v${{ steps.version.outputs.version }}
+          name: "GestHôte v${{ steps.version.outputs.version }}"
+          files: gesthote-${{ steps.version.outputs.version }}.apk
+          fail_on_unmatched_files: true
+          generate_release_notes: false
+
+      - name: Persist android platform + keystore
+        if: env.NEW_KS == '1'
+        run: |
+          git config user.name "github-actions"
+          git config user.email "actions@github.com"
+          git add -f android/app/gesthote.p12 android/app/build.gradle
+          git commit -m "ci: persist stable signing keystore [skip ci]" || true
+          git push || true
