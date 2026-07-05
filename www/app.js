@@ -699,7 +699,13 @@ function sheetSettings() {
       <button class="btn ghost block" data-reset>♻️ Réinitialiser la démo</button>
       <div class="tiny muted" style="margin-top:8px">Efface vos modifications locales et recharge les données d'exemple.</div>
     </div>
-    <div class="card small muted">GestHôte — clone Superhote (démo). Prochaines étapes : sync iCal réelle, paiements, serrures connectées, IA messagerie via Claude API.</div>
+    <div class="sec-title">À propos</div>
+    <div class="card">
+      <div class="kv"><span class="k">Application</span><span class="v">GestHôte</span></div>
+      <div class="kv"><span class="k">Version</span><span class="v">v${window.APP_VERSION}</span></div>
+      <div class="kv"><span class="k">Build</span><span class="v">${window.APP_VERSION} · démo</span></div>
+    </div>
+    <div class="card small muted">Clone Superhote (démo). Prochaines étapes : sync iCal réelle, paiements, serrures connectées, IA messagerie via Claude API.</div>
   `);
 }
 

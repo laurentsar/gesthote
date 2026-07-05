@@ -1,9 +1,5 @@
 node_modules/
-android/app/build/
-android/build/
-android/.gradle/
-android/captures/
-android/local.properties
-android/app/src/main/assets/public/
+# Plateforme Android régénérée à chaque build CI (cap add). Keystore stable dans ci/.
+android/
 *.log
 .DS_Store

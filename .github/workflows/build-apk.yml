@@ -33,21 +33,21 @@ jobs:
       - name: Install JS deps
         run: npm install --no-audit --no-fund
 
-      - name: Initialize Capacitor Android platform (first build only)
-        run: |
-          if [ ! -d android ]; then
-            npx cap add android
-          fi
-
       - name: Generate stable signing keystore (first build only)
         run: |
-          if [ ! -f android/app/gesthote.p12 ]; then
-            keytool -genkeypair -v -keystore android/app/gesthote.p12 -storetype PKCS12 \
+          if [ ! -f ci/gesthote.p12 ]; then
+            keytool -genkeypair -v -keystore ci/gesthote.p12 -storetype PKCS12 \
               -alias gesthote -keyalg RSA -keysize 2048 -validity 10000 \
               -storepass gesthote -keypass gesthote \
               -dname "CN=GestHote, O=Laurent, C=FR"
             echo "NEW_KS=1" >> "$GITHUB_ENV"
           fi
+
+      - name: Regenerate Android platform (fresh each build)
+        run: |
+          rm -rf android
+          npx cap add android
+          cp ci/gesthote.p12 android/app/gesthote.p12
 
       - name: Configure release signing
         run: python3 ci/patch_signing.py
@@ -103,11 +103,11 @@ jobs:
           fail_on_unmatched_files: true
           generate_release_notes: false
 
-      - name: Persist android platform + keystore
+      - name: Persist stable keystore
         if: env.NEW_KS == '1'
         run: |
           git config user.name "github-actions"
           git config user.email "actions@github.com"
-          git add -f android/app/gesthote.p12 android/app/build.gradle
+          git add -f ci/gesthote.p12
           git commit -m "ci: persist stable signing keystore [skip ci]" || true
           git push || true
