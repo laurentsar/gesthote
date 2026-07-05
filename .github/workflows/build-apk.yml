@@ -50,41 +50,10 @@ jobs:
           fi
 
       - name: Configure release signing
-        run: |
-          GRADLE=android/app/build.gradle
-          if ! grep -q "gesthote.p12" "$GRADLE"; then
-            python3 - "$GRADLE" <<'PY'
-import re, sys
-p = sys.argv[1]
-s = open(p).read()
-signing = '''    signingConfigs {
-        release {
-            storeFile file('gesthote.p12')
-            storePassword 'gesthote'
-            keyAlias 'gesthote'
-            keyPassword 'gesthote'
-            storeType 'PKCS12'
-        }
-    }
-'''
-s = s.replace('    buildTypes {', signing + '    buildTypes {', 1)
-s = re.sub(r'(release \{)', r'\1\n            signingConfig signingConfigs.release', s, count=1)
-open(p, 'w').write(s)
-PY
-          fi
+        run: python3 ci/patch_signing.py
 
       - name: Sync versionName from www/version.json
-        run: |
-          VER=$(python3 -c "import json;print(json.load(open('www/version.json'))['version'])")
-          python3 - "$VER" <<'PY'
-import re, sys
-ver = sys.argv[1]
-p = 'android/app/build.gradle'
-s = open(p).read()
-s = re.sub(r'versionName\s+"[^"]*"', 'versionName "%s"' % ver, s, count=1)
-open(p, 'w').write(s)
-print("versionName ->", ver)
-PY
+        run: python3 ci/set_version.py
 
       - name: Sync Capacitor (Android)
         run: npx cap sync android
