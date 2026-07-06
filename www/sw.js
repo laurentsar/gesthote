@@ -15,6 +15,9 @@ self.addEventListener('activate', e => e.waitUntil(
 ));
 
 self.addEventListener('fetch', e => {
+  // Ne pas intercepter les requêtes vers d'autres origines (ex. synchro iCal externe) :
+  // laisser passer telles quelles pour que les erreurs réseau/CORS remontent à l'appelant.
+  if (new URL(e.request.url).origin !== self.location.origin) return;
   // Toujours récupérer version.json depuis le réseau (pour les MAJ)
   if (e.request.url.includes('version.json')) {
     e.respondWith(fetch(e.request).catch(() => caches.match(e.request)));

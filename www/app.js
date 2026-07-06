@@ -255,11 +255,15 @@ function vPlanning() {
     <span class="badge plat b-direct">Direct</span> <span class="badge plat b-abritel">Abritel</span>
   </div>
   <div class="card" style="margin-top:12px">
-    <h2>🔄 Synchronisation des canaux</h2>
-    <div class="small muted" style="margin-bottom:8px">Calendriers synchronisés — anti-double réservation actif.</div>
-    ${['Airbnb','Booking.com','Abritel'].map(c => `<div class="row">
-      <div class="grow"><div class="title small">${c}</div><div class="tiny muted">Dernière synchro il y a 8 min</div></div>
-      <span class="badge ok">● à jour</span></div>`).join('')}
+    <h2>🔄 Synchronisation Booking.com</h2>
+    <div class="small muted" style="margin-bottom:8px">Import iCal en lecture seule : bloque les dates réservées côté Booking.com pour éviter le surbooking.</div>
+    ${S.properties.length ? S.properties.map(p => `<div class="row">
+      <div class="grow"><div class="title small">${p.emoji} ${p.name}</div>
+        <div class="tiny muted">${p.icalUrl ? (p.icalLastSync ? 'Dernière synchro : ' + fmtDateJ(iso(p.icalLastSync)) + ' ' + new Date(p.icalLastSync).toTimeString().slice(0,5) : 'Jamais synchronisé') : 'Aucune URL iCal configurée'}</div></div>
+      ${p.icalUrl ? `<button class="btn ghost sm" data-sync-ical="${p.id}">🔄 Synchroniser</button>`
+        : `<button class="btn ghost sm" data-edit-prop="${p.id}">Configurer</button>`}
+    </div>`).join('') : '<div class="empty small">Ajoutez un logement pour activer la synchro.</div>'}
+    <div class="tiny muted" style="margin-top:8px">Airbnb / Abritel : pas de synchro automatique pour l'instant (nécessite un partenariat officiel). En attendant, leur export iCal peut être ajouté de la même façon.</div>
   </div>`;
 }
 
@@ -750,7 +754,14 @@ function sheetPropertyForm(id) {
       <input id="f-wifiPass" value="${p ? p.wifiPass : ''}" style="${FIELD}">
       <label class="small muted">Code porte</label>
       <input id="f-code" value="${p ? p.code : ''}" style="${FIELD}">
+      <label class="small muted" style="display:block;margin-top:4px">URL iCal Booking.com</label>
+      <input id="f-ical" placeholder="https://admin.booking.com/.../calendar.ics" value="${p ? (p.icalUrl || '') : ''}" style="${FIELD}">
+      <div class="tiny muted" style="margin-top:-8px">Extranet Booking.com → Réglages → Calendrier → Synchroniser les calendriers → copier le lien d'export iCal. Synchro en lecture seule : bloque les dates, ne remonte pas le nom du voyageur.</div>
     </div>
+    ${p && p.icalUrl ? `<div class="card small muted" style="display:flex;justify-content:space-between;align-items:center;gap:10px">
+      <span>Dernière synchro Booking.com : ${p.icalLastSync ? fmtDateJ(iso(p.icalLastSync)) + ' ' + new Date(p.icalLastSync).toTimeString().slice(0,5) : 'jamais'}</span>
+      <button class="btn ghost sm" data-sync-ical="${id}">🔄 Synchroniser</button>
+    </div>` : ''}
     <button class="btn block" data-save-prop="${id || ''}">${p ? 'Enregistrer' : 'Créer le logement'}</button>
     ${p ? `<button class="btn ghost block" style="margin-top:8px" data-delete-prop="${id}">🗑️ Supprimer ce logement</button>` : ''}
   `);
@@ -769,6 +780,7 @@ function saveProperty(sg, id) {
     wifi: sg.querySelector('#f-wifi').value.trim(),
     wifiPass: sg.querySelector('#f-wifiPass').value.trim(),
     code: sg.querySelector('#f-code').value.trim(),
+    icalUrl: sg.querySelector('#f-ical').value.trim(),
   };
   if (id) {
     Object.assign(prop(id), data);
@@ -786,6 +798,63 @@ function deleteProperty(id) {
   S.cleaning = S.cleaning.filter(c => c.pid !== id);
   if (S.activePid === id) S.activePid = 'all';
   save(); closeSheet(); toast('Logement supprimé'); render();
+}
+
+// ---------- Synchronisation iCal Booking.com (lecture seule) ----------
+function parseIcal(text) {
+  const unfolded = text.replace(/\r\n[ \t]/g, '').replace(/\n[ \t]/g, '');
+  return unfolded.split('BEGIN:VEVENT').slice(1).map(block => {
+    const body = block.split('END:VEVENT')[0];
+    const grab = re => { const m = body.match(re); return m ? m[1].replace(/\r$/, '').trim() : null; };
+    const startRaw = grab(/DTSTART[^:\n]*:(\d{8})/);
+    const endRaw = grab(/DTEND[^:\n]*:(\d{8})/);
+    const toIso = raw => `${raw.slice(0,4)}-${raw.slice(4,6)}-${raw.slice(6,8)}`;
+    return {
+      start: startRaw ? toIso(startRaw) : null,
+      end: endRaw ? toIso(endRaw) : null,
+      uid: grab(/UID:(.+)/),
+      summary: grab(/SUMMARY:(.+)/),
+    };
+  }).filter(ev => ev.start && ev.end);
+}
+
+async function importIcal(propId) {
+  const p = prop(propId);
+  if (!p || !p.icalUrl) { toast('Aucune URL iCal configurée'); return; }
+  toast('🔄 Synchronisation Booking.com…');
+  let text;
+  try {
+    const res = await fetch(p.icalUrl, { cache: 'no-store' });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    text = await res.text();
+  } catch (e) {
+    toast("⛔ Échec de la synchro — sur la version web, Booking.com bloque souvent l'accès direct (CORS) ; utilisez l'app Android.");
+    return;
+  }
+  const events = parseIcal(text);
+  let added = 0, updated = 0;
+  events.forEach(ev => {
+    const existing = S.bookings.find(b => b.pid === propId && b.icalUid === ev.uid);
+    if (existing) {
+      existing.checkIn = ev.start; existing.checkOut = ev.end;
+      existing.nights = nightsBetween(ev.start, ev.end);
+      updated++;
+    } else {
+      const id = 'bic' + Math.random().toString(36).slice(2, 9);
+      S.bookings.push({
+        id, pid: propId, plat: 'booking', guest: ev.summary || 'Réservation Booking.com',
+        checkIn: ev.start, checkOut: ev.end, nights: nightsBetween(ev.start, ev.end),
+        guests: p.cap, amount: 0, avatarColor: '#3b82f6', review: null, note: '',
+        icalUid: ev.uid, imported: true,
+      });
+      S.conversations[id] = { unread: 0, msgs: [] };
+      added++;
+    }
+  });
+  p.icalLastSync = new Date().toISOString();
+  save();
+  toast(`✅ Booking.com : ${added} ajoutée(s), ${updated} mise(s) à jour`);
+  closeSheet(); sheetPropertyForm(propId);
 }
 
 // Ajouter une réservation
@@ -931,6 +1000,7 @@ function bindCommon(root) {
   root.querySelectorAll('[data-edit-prop]').forEach(el => el.onclick = () => { closeSheet(); sheetPropertyForm(el.dataset.editProp); });
   root.querySelectorAll('[data-save-prop]').forEach(el => el.onclick = () => saveProperty(document.querySelector('.sheet-bg'), el.dataset.saveProp || null));
   root.querySelectorAll('[data-delete-prop]').forEach(el => el.onclick = () => deleteProperty(el.dataset.deleteProp));
+  root.querySelectorAll('[data-sync-ical]').forEach(el => el.onclick = () => importIcal(el.dataset.syncIcal));
 }
 // Re-câbler dans les sheets injectées
 const _openSheet = openSheet;

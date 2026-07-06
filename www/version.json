@@ -1,4 +1,4 @@
 {
-  "version": "1.1.0",
-  "notes": "Logements gérables (ajout/modif/suppression), liste d'intervenants ménage paramétrable, messages automatiques configurables (jour de résa, veille d'arrivée, veille de départ, 2h après départ). Données de démonstration supprimées : l'app démarre vide."
+  "version": "1.2.0",
+  "notes": "Synchronisation iCal Booking.com par logement (lecture seule) : bloque automatiquement les dates réservées sur Booking.com pour éviter le surbooking. Corrige aussi le service worker qui masquait silencieusement les erreurs réseau des synchros."
 }

@@ -5,7 +5,7 @@ Application de gestion de locations courte durée (PMS + channel manager), style
 ## Modules (MVP)
 
 - **Tableau de bord** — occupation 30 j, revenu du mois, arrivées/départs du jour, alertes intelligentes.
-- **Planning** — calendrier timeline multi-logements, barres colorées par canal, statut de synchro des canaux (anti-double réservation).
+- **Planning** — calendrier timeline multi-logements, barres colorées par canal, synchro iCal Booking.com par logement (anti-double réservation).
 - **Réservations** — liste filtrable (sur place / à venir / passées), fiche détaillée, création avec contrôle de conflit de dates.
 - **Messagerie** — boîte unifiée tous canaux, messages automatiques configurables (jour de la réservation, veille d'arrivée, veille de départ, 2h après départ) dans *Plus → Messages automatiques*.
 - **Ménage** — turnover auto à chaque départ, statut planifié → à faire → fait, assignation à un intervenant via une liste déroulante paramétrable (*Plus → Ménage → Gérer la liste des intervenants*).
