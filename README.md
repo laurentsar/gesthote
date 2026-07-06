@@ -7,9 +7,10 @@ Application de gestion de locations courte durée (PMS + channel manager), style
 - **Tableau de bord** — occupation 30 j, revenu du mois, arrivées/départs du jour, alertes intelligentes.
 - **Planning** — calendrier timeline multi-logements, barres colorées par canal, statut de synchro des canaux (anti-double réservation).
 - **Réservations** — liste filtrable (sur place / à venir / passées), fiche détaillée, création avec contrôle de conflit de dates.
-- **Messagerie** — boîte unifiée tous canaux, messages automatiques (confirmation, arrivée J-1, bienvenue, départ, avis J+1).
-- **Ménage** — turnover auto à chaque départ, statut planifié → à faire → fait.
+- **Messagerie** — boîte unifiée tous canaux, messages automatiques configurables (jour de la réservation, veille d'arrivée, veille de départ, 2h après départ) dans *Plus → Messages automatiques*.
+- **Ménage** — turnover auto à chaque départ, statut planifié → à faire → fait, assignation à un intervenant via une liste déroulante paramétrable (*Plus → Ménage → Gérer la liste des intervenants*).
 - **Livret d'accueil** — guide digital par logement (wifi, code, règles, bonnes adresses).
+- **Logements** — ajout / modification / suppression depuis *Plus → Réglages*.
 
 ## Améliorations vs Superhote
 
@@ -30,4 +31,4 @@ CI GitHub Actions (`.github/workflows/build-apk.yml`) : au push sur `main`/`mast
 
 ## Statut
 
-Données 100 % démo (localStorage). Étapes suivantes : sync iCal réelle Airbnb/Booking, paiements, serrures connectées, IA messagerie via Claude API.
+Données stockées localement (localStorage), l'app démarre vide : ajoutez vos logements dans Réglages. Étapes suivantes : sync iCal réelle Airbnb/Booking, paiements, serrures connectées, IA messagerie via Claude API.

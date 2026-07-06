@@ -25,76 +25,30 @@ const PLAT = {
   abritel: { label: 'Abritel', cls: 'b-abritel', emoji: '🏖️' },
 };
 
-// ---------- Données de démonstration ----------
+// ---------- Messages automatiques (réglages par défaut) ----------
+const DEFAULT_AUTO_MESSAGES = () => [
+  { id: 'reservation', label: 'Le jour de la réservation', enabled: true,
+    template: "Bonjour {prenom}, votre réservation à {logement} est confirmée ✅. À bientôt !" },
+  { id: 'arrival-1', label: "La veille de l'arrivée", enabled: true,
+    template: "Bonjour {prenom}, votre arrivée approche ! Accès autonome dès 15h. Code porte : {code}. Wifi : {wifi} ({wifiPass})." },
+  { id: 'departure-1', label: 'La veille du départ', enabled: true,
+    template: "Bonjour {prenom}, nous espérons que votre séjour se passe bien. Petit rappel : départ demain avant 11h, merci de nous laisser les clés à l'endroit convenu." },
+  { id: 'departure+2h', label: '2h après le départ', enabled: true,
+    template: "Merci pour votre séjour {prenom} ! Ce fut un plaisir de vous accueillir. Un avis nous aiderait beaucoup ⭐" },
+];
+
+// ---------- État initial (aucune donnée de test : à configurer par l'hôte) ----------
 function seed() {
-  const properties = [
-    { id: 'p1', name: 'Studio Vieux-Port', emoji: '🌊', color: '#14b8a6',
-      city: 'Marseille', address: '12 quai du Port, 13002 Marseille', cap: 2, base: 89,
-      wifi: 'VieuxPort_5G', wifiPass: 'soleil2026', code: '4821' },
-    { id: 'p2', name: 'Chalet des Cimes', emoji: '🏔️', color: '#f59e0b',
-      city: 'Chamonix', address: '340 route des Praz, 74400 Chamonix', cap: 6, base: 240,
-      wifi: 'ChaletCimes', wifiPass: 'montagne74', code: '7093' },
-    { id: 'p3', name: 'Loft Canal', emoji: '🎨', color: '#a855f7',
-      city: 'Paris 10e', address: '8 rue de Marseille, 75010 Paris', cap: 4, base: 155,
-      wifi: 'LoftCanal', wifiPass: 'paris10eme', code: '1150' },
-  ];
-
-  const mk = (id, pid, plat, guest, inO, nights, guests, amount, extra = {}) => ({
-    id, pid, plat, guest,
-    checkIn: D(inO), checkOut: D(inO + nights), nights, guests, amount,
-    avatarColor: ['#ef4444','#3b82f6','#a855f7','#14b8a6','#f59e0b','#ec4899'][id.charCodeAt(1) % 6],
-    review: extra.review || null, note: extra.note || '',
-  });
-
-  const bookings = [
-    mk('b1', 'p1', 'airbnb',  'Marie Lefebvre',    -1, 3, 2, 267),
-    mk('b2', 'p1', 'booking', 'Thomas & Julie',     5, 4, 2, 356),
-    mk('b7', 'p1', 'airbnb',  'Kevin Roy',          -8, 3, 1, 240, { review: 'pending' }),
-    mk('b3', 'p2', 'direct',  'Famille Nguyen',      0, 7, 5, 1680),
-    mk('b8', 'p2', 'booking', 'Groupe Ski Lyon',    -4, 4, 6, 960),
-    mk('b4', 'p2', 'abritel', 'Sophie Marchand',    12, 3, 4, 720),
-    mk('b5', 'p3', 'booking', 'Anna Schmidt',        2, 4, 4, 620),
-    mk('b9', 'p3', 'direct',  'David Cohen',        -2, 3, 3, 465),
-    mk('b6', 'p3', 'airbnb',  'Lucas Bernard',      -3, 2, 2, 310, { review: 5 }),
-  ];
-
-  // Conversations (msg auto marqués isAuto)
-  const t = (off, h) => `${D(off)} ${h}`;
-  const conversations = {
-    b1: { unread: 0, msgs: [
-      { from: 'host',  text: 'Bonjour Marie, votre réservation au Studio Vieux-Port est confirmée ✅. À bientôt !', at: t(-6,'09:12'), isAuto: true },
-      { from: 'host',  text: "Bienvenue ! Arrivée autonome dès 15h. Code de la porte : 4821. Wifi : VieuxPort_5G.", at: t(-1,'08:00'), isAuto: true },
-      { from: 'guest', text: 'Merci beaucoup, tout est parfait, la vue est superbe ! 😍', at: t(-1,'16:40') },
-    ]},
-    b5: { unread: 1, msgs: [
-      { from: 'host',  text: 'Bonjour Anna, réservation confirmée pour le Loft Canal ✅', at: t(-2,'11:00'), isAuto: true },
-      { from: 'guest', text: 'Bonjour ! Est-ce que le parking est possible à proximité ? Nous arrivons en voiture.', at: t(-1,'19:22') },
-    ]},
-    b8: { unread: 1, msgs: [
-      { from: 'guest', text: "Bonjour, la douche fuit et le chauffage ne marche pas. On est très déçus pour ce prix, c'est un problème.", at: t(-1,'21:05') },
-    ]},
-    b3: { unread: 0, msgs: [
-      { from: 'host',  text: 'Bonjour, bienvenue au Chalet des Cimes ! Arrivée à partir de 16h aujourd’hui 🏔️', at: t(0,'08:30'), isAuto: true },
-      { from: 'guest', text: 'Parfait, on arrive vers 17h. Hâte !', at: t(0,'09:10') },
-    ]},
-    b9: { unread: 0, msgs: [
-      { from: 'host',  text: 'Bon séjour David ! N’hésitez pas si besoin.', at: t(-2,'15:00'), isAuto: true },
-    ]},
+  return {
+    properties: [],
+    bookings: [],
+    conversations: {},
+    cleaning: [],
+    cleaners: [],
+    autoMessages: DEFAULT_AUTO_MESSAGES(),
+    activePid: 'all',
+    v: 2,
   };
-
-  const cleaners = ['Fatima', 'Sébastien', 'Agence CleanPro'];
-  // Ménage : un turnover à chaque départ
-  const cleaning = bookings
-    .filter(b => nightsBetween(D(-2), b.checkOut) >= 0)     // départs récents/à venir
-    .map((b, i) => ({
-      id: 'c' + b.id, pid: b.pid, date: b.checkOut, bookingId: b.id,
-      cleaner: cleaners[i % cleaners.length],
-      status: nightsBetween(D(0), b.checkOut) < 0 ? 'done'
-            : nightsBetween(D(0), b.checkOut) === 0 ? 'todo' : 'planned',
-    }))
-    .sort((a, b) => a.date.localeCompare(b.date));
-
-  return { properties, bookings, conversations, cleaning, activePid: 'all', v: 1 };
 }
 
 // ---------- État ----------
@@ -102,7 +56,7 @@ const KEY = 'gesthote.state';
 let S;
 function load() {
   try { S = JSON.parse(localStorage.getItem(KEY)); } catch (e) { S = null; }
-  if (!S || S.v !== 1) { S = seed(); save(); }
+  if (!S || S.v !== 2) { S = seed(); save(); }
 }
 function save() { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} }
 const prop = id => S.properties.find(p => p.id === id);
@@ -168,7 +122,7 @@ function vHome() {
     const day = D(off);
     occ += bks.filter(b => b.checkIn <= day && b.checkOut > day).length;
   }
-  const occRate = Math.round((occ / cap) * 100);
+  const occRate = cap ? Math.round((occ / cap) * 100) : 0;
 
   const pendingReviews = bks.filter(b => b.review === 'pending').length;
   const unread = Object.entries(S.conversations)
@@ -419,6 +373,7 @@ function aiSuggest(convId) {
 function vPlus() {
   const items = [
     ['cleaning', '🧹', 'Ménage & turnover', `${S.cleaning.filter(c=>c.status!=='done').length} à venir`],
+    ['automsg', '🔔', 'Messages automatiques', `${S.autoMessages.filter(m=>m.enabled).length}/${S.autoMessages.length} actifs`],
     ['livret', '📗', "Livret d'accueil", 'Guide voyageur digital'],
     ['pricing', '💶', 'Tarification dynamique', 'Recommandations IA'],
     ['guests', '👥', 'Voyageurs', `${S.bookings.length} séjours`],
@@ -454,23 +409,22 @@ function sheetBooking(id) {
   const past = b.checkOut <= D(0);
   const perNight = Math.round(b.amount / b.nights);
 
-  // Moteur d'automatisation : statut de chaque message programmé
+  // Moteur d'automatisation : statut de chaque message programmé (réglages dans Plus → Messages automatiques)
   const now = D(0);
-  const steps = [
-    { ic: '✅', label: 'Confirmation de réservation', when: b.checkIn, rule: 'à la réservation', sent: true },
-    { ic: '🔑', label: "Instructions d'arrivée (code, wifi)", whenIso: D_before(b.checkIn, 1), rule: 'J-1' },
-    { ic: '👋', label: 'Message de bienvenue', whenIso: b.checkIn, rule: "jour d'arrivée" },
-    { ic: '🧳', label: 'Rappel de départ', whenIso: b.checkOut, rule: 'jour du départ' },
-    { ic: '⭐', label: "Demande d'avis", whenIso: D_after(b.checkOut, 1), rule: 'J+1' },
-  ];
-  const stepHtml = steps.map(s => {
-    const w = s.whenIso || s.when;
-    const done = s.sent || w < now;
-    const next = !done && w === now;
+  const triggerDate = {
+    'reservation': b.checkIn,
+    'arrival-1': D_before(b.checkIn, 1),
+    'departure-1': D_before(b.checkOut, 1),
+    'departure+2h': b.checkOut,
+  };
+  const stepHtml = S.autoMessages.map(m => {
+    const w = triggerDate[m.id];
+    const sent = m.id === 'reservation' || w < now;
+    const next = !sent && w === now;
     return `<li>
-      <span class="st-ico ${done?'done':next?'next':''}">${done?'✓':s.ic}</span>
-      <div><div class="small" style="font-weight:600">${s.label}</div>
-        <div class="tiny muted">${s.rule} · ${done?'envoyé':next?"aujourd'hui":'programmé '+fmtDate(w)}</div></div>
+      <span class="st-ico ${m.enabled && sent?'done':m.enabled && next?'next':''}">${m.enabled && sent?'✓':'🔔'}</span>
+      <div><div class="small" style="font-weight:600">${m.label}</div>
+        <div class="tiny muted">${!m.enabled?'désactivé':sent?'envoyé':next?"aujourd'hui":'programmé '+fmtDate(w)}</div></div>
     </li>`;
   }).join('');
 
@@ -500,7 +454,6 @@ function sheetBooking(id) {
   `);
 }
 const D_before = (isoStr, n) => iso(new Date(parse(isoStr).getTime() - n * DAY));
-const D_after  = (isoStr, n) => iso(new Date(parse(isoStr).getTime() + n * DAY));
 
 // Fil de discussion
 function sheetThread(id) {
@@ -549,6 +502,37 @@ const TPL = {
   upsell:  b => `Petit plus : arrivée anticipée (+20 €), ménage de mi-séjour (+35 €) ou panier de produits locaux (+25 €) ? Dites-moi ✨`,
 };
 
+// Rendu d'un message automatique configuré (Réglages → Messages automatiques) pour une réservation
+function renderAutoTemplate(msgId, b) {
+  const m = S.autoMessages.find(x => x.id === msgId);
+  if (!m || !m.enabled) return null;
+  const p = prop(b.pid);
+  return m.template
+    .replaceAll('{prenom}', b.guest.split(' ')[0])
+    .replaceAll('{logement}', `${p.emoji} ${p.name}`)
+    .replaceAll('{code}', p.code || '')
+    .replaceAll('{wifi}', p.wifi || '')
+    .replaceAll('{wifiPass}', p.wifiPass || '');
+}
+
+// Messages automatiques
+function sheetAutoMessages() {
+  const row = m => `<div class="card">
+    <div class="row" style="border:0;padding:0 0 8px">
+      <div class="grow title small">${m.label}</div>
+      <label class="small" style="display:flex;align-items:center;gap:6px;cursor:pointer;white-space:nowrap">
+        <input type="checkbox" data-toggle-auto="${m.id}" ${m.enabled?'checked':''}> Actif
+      </label>
+    </div>
+    <textarea data-tpl-auto="${m.id}" rows="3" style="width:100%;padding:10px;border-radius:10px;background:var(--card2);color:var(--txt);border:1px solid var(--line);font:inherit;resize:vertical">${m.template}</textarea>
+  </div>`;
+  openSheet(`
+    <h2>🔔 Messages automatiques</h2>
+    <div class="small muted" style="margin-bottom:10px">Envoyés automatiquement à vos voyageurs. Activez/désactivez et personnalisez le texte de chacun. Variables disponibles : {prenom} {logement} {code} {wifi} {wifiPass}</div>
+    ${S.autoMessages.map(row).join('')}
+  `);
+}
+
 // Ménage
 function sheetCleaning() {
   const list = filtered(S.cleaning);
@@ -559,20 +543,45 @@ function sheetCleaning() {
     return `<div class="row">
       <div class="avatar" style="background:${p.color}">${p.emoji}</div>
       <div class="grow"><div class="title small">${p.name}</div>
-        <div class="tiny muted">${fmtDateJ(c.date)} · ${c.cleaner}${nextIn?` · arrivée ${nextIn.guest.split(' ')[0]} même jour`:''}</div></div>
+        <div class="tiny muted">${fmtDateJ(c.date)}${nextIn?` · arrivée ${nextIn.guest.split(' ')[0]} même jour`:''}</div>
+        <select data-clean-assign="${c.id}" style="margin-top:6px;padding:6px 8px;border-radius:8px;background:var(--card2);color:var(--txt);border:1px solid var(--line);font-size:12px">
+          <option value="">— Qui fait le ménage ? —</option>
+          ${S.cleaners.map(name => `<option value="${name}" ${c.cleaner===name?'selected':''}>${name}</option>`).join('')}
+        </select></div>
       <button class="badge ${st[0]}" data-clean="${c.id}">${st[1]}</button>
     </div>`;
   };
   openSheet(`
     <h2>🧹 Ménage & turnover</h2>
-    <div class="small muted" style="margin-bottom:10px">Une intervention est créée à chaque départ. Touchez le statut pour le faire avancer.</div>
+    <div class="small muted" style="margin-bottom:10px">Une intervention est créée à chaque départ. Choisissez qui s'en charge dans la liste, touchez le statut pour le faire avancer.</div>
     <div class="card">${list.length ? list.map(item).join('') : '<div class="empty small">Rien à nettoyer</div>'}</div>
-    <div class="card small muted">💡 Amélioration : notification auto à l'équipe dès qu'un départ est confirmé + checklist photo de fin de ménage.</div>
+    <button class="btn ghost block" data-manage-cleaners>⚙️ Gérer la liste des intervenants</button>
+  `);
+}
+
+// Gestion de la liste des intervenants ménage
+function sheetCleaners() {
+  openSheet(`
+    <h2>👤 Intervenants ménage</h2>
+    <div class="small muted" style="margin-bottom:10px">Liste des personnes ou équipes qui peuvent être assignées au ménage.</div>
+    <div class="card">${S.cleaners.length ? S.cleaners.map(name => `<div class="row">
+      <div class="grow title small">${name}</div>
+      <button class="btn ghost sm" data-remove-cleaner="${name}">Retirer</button>
+    </div>`).join('') : '<div class="empty small">Aucun intervenant — ajoutez-en un ci-dessous</div>'}</div>
+    <div class="card">
+      <label class="small muted">Nouvel intervenant</label>
+      <input id="f-cleaner" placeholder="Ex. Fatima, Agence CleanPro…" style="${FIELD}">
+      <button class="btn block" data-add-cleaner>+ Ajouter</button>
+    </div>
   `);
 }
 
 // Livret d'accueil
 function sheetLivret() {
+  if (!S.properties.length) {
+    openSheet(`<h2>📗 Livret d'accueil</h2><div class="empty small">Ajoutez d'abord un logement dans Réglages pour créer son livret d'accueil.</div>`);
+    return;
+  }
   const p = S.activePid === 'all' ? S.properties[0] : prop(S.activePid);
   openSheet(`
     <h2>📗 Livret d'accueil</h2>
@@ -636,8 +645,8 @@ function sheetPricing() {
   openSheet(`
     <h2>💶 Tarification dynamique</h2>
     <div class="small muted" style="margin-bottom:10px">Prix conseillés selon saison, week-end, événements locaux et taux de remplissage. 🤖 Amélioration : intégration météo + agenda événementiel de la ville.</div>
-    ${props.map(block).join('')}
-    <button class="btn block" data-apply-price>✅ Appliquer les prix conseillés</button>
+    ${props.length ? props.map(block).join('') : '<div class="empty small">Ajoutez un logement pour voir les recommandations tarifaires.</div>'}
+    ${props.length ? '<button class="btn block" data-apply-price>✅ Appliquer les prix conseillés</button>' : ''}
   `);
 }
 
@@ -646,7 +655,7 @@ function sheetGuests() {
   const list = filtered(S.bookings).slice().sort((a,b)=>b.checkIn.localeCompare(a.checkIn));
   openSheet(`
     <h2>👥 Voyageurs</h2>
-    <div class="card" style="padding:4px 14px">${list.map(b => {
+    <div class="card" style="padding:4px 14px">${list.length ? list.map(b => {
       const p = prop(b.pid);
       return `<div class="row" data-open="${b.id}">
         <div class="avatar" style="background:${b.avatarColor}">${b.guest[0]}</div>
@@ -654,7 +663,7 @@ function sheetGuests() {
           <div class="tiny muted">${p.emoji} ${p.name} · ${fmtDate(b.checkIn)}</div></div>
         ${typeof b.review==='number'?`<span class="badge ok">★ ${b.review}</span>`:b.review==='pending'?'<span class="badge warn">avis ?</span>':`<span class="badge plat ${PLAT[b.plat].cls}">${PLAT[b.plat].label}</span>`}
       </div>`;
-    }).join('')}</div>
+    }).join('') : '<div class="empty small">Aucun voyageur</div>'}</div>
   `);
 }
 
@@ -665,22 +674,22 @@ function sheetStats() {
   const nights = bks.reduce((s,b)=>s+b.nights,0);
   const byPlat = {};
   bks.forEach(b => byPlat[b.plat] = (byPlat[b.plat]||0) + b.amount);
-  const max = Math.max(...Object.values(byPlat));
+  const max = Math.max(1, ...Object.values(byPlat));
   openSheet(`
     <h2>📈 Statistiques</h2>
     <div class="kpis">
       <div class="kpi"><div class="v">${money(rev)}</div><div class="l">Revenu total</div></div>
-      <div class="kpi"><div class="v">${money(Math.round(rev/nights))}</div><div class="l">Prix moyen / nuit</div></div>
+      <div class="kpi"><div class="v">${money(nights ? Math.round(rev/nights) : 0)}</div><div class="l">Prix moyen / nuit</div></div>
       <div class="kpi"><div class="v">${nights}</div><div class="l">Nuits vendues</div></div>
       <div class="kpi"><div class="v">${bks.length}</div><div class="l">Réservations</div></div>
     </div>
     <div class="sec-title">Revenu par canal</div>
-    <div class="card">${Object.entries(byPlat).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`
+    <div class="card">${Object.keys(byPlat).length ? Object.entries(byPlat).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`
       <div style="margin-bottom:10px"><div class="row" style="border:0;padding:0 0 4px">
         <span class="small" style="font-weight:600">${PLAT[k].label}</span><span class="spacer" style="flex:1"></span>
         <span class="small">${money(v)}</span></div>
         <div class="bar"><span style="width:${Math.round(v/max*100)}%;background:${k==='airbnb'?'#ff5a5f':k==='booking'?'#3b82f6':k==='direct'?'#a855f7':'#f59e0b'}"></span></div></div>
-    `).join('')}</div>
+    `).join('') : '<div class="empty small">Aucune réservation</div>'}</div>
     <div class="card small muted">💡 Améliorer la part « Direct » (0% de commission) via le livret + relance des anciens voyageurs.</div>
   `);
 }
@@ -690,27 +699,101 @@ function sheetSettings() {
   openSheet(`
     <h2>⚙️ Réglages</h2>
     <div class="sec-title">Logements</div>
-    <div class="card">${S.properties.map(p => `<div class="row">
+    <div class="card">${S.properties.length ? S.properties.map(p => `<div class="row" data-edit-prop="${p.id}" style="cursor:pointer">
       <div class="avatar" style="background:${p.color}">${p.emoji}</div>
-      <div class="grow"><div class="title small">${p.name}</div><div class="tiny muted">${p.city} · base ${p.base}€</div></div>
-    </div>`).join('')}</div>
+      <div class="grow"><div class="title small">${p.name}</div><div class="tiny muted">${p.city || 'Ville non renseignée'} · base ${p.base}€</div></div>
+      <span class="dim">›</span>
+    </div>`).join('') : '<div class="empty small">Aucun logement — ajoutez le premier ci-dessous</div>'}</div>
+    <button class="btn ghost block" data-add-prop>+ Ajouter un logement</button>
     <div class="sec-title">Données</div>
     <div class="card">
-      <button class="btn ghost block" data-reset>♻️ Réinitialiser la démo</button>
-      <div class="tiny muted" style="margin-top:8px">Efface vos modifications locales et recharge les données d'exemple.</div>
+      <button class="btn ghost block" data-reset>♻️ Réinitialiser l'application</button>
+      <div class="tiny muted" style="margin-top:8px">Efface toutes les données (logements, réservations, ménage, messages) et repart de zéro.</div>
     </div>
     <div class="sec-title">À propos</div>
     <div class="card">
       <div class="kv"><span class="k">Application</span><span class="v">GestHôte</span></div>
       <div class="kv"><span class="k">Version</span><span class="v">v${window.APP_VERSION}</span></div>
-      <div class="kv"><span class="k">Build</span><span class="v">${window.APP_VERSION} · démo</span></div>
+      <div class="kv"><span class="k">Build</span><span class="v">${window.APP_VERSION}</span></div>
     </div>
-    <div class="card small muted">Clone Superhote (démo). Prochaines étapes : sync iCal réelle, paiements, serrures connectées, IA messagerie via Claude API.</div>
+    <div class="card small muted">Clone Superhote. Prochaines étapes : sync iCal réelle, paiements, serrures connectées, IA messagerie via Claude API.</div>
   `);
+}
+
+const FIELD = 'width:100%;margin:6px 0 12px;padding:11px;border-radius:10px;background:var(--card2);color:var(--txt);border:1px solid var(--line)';
+
+// Ajouter / modifier un logement
+function sheetPropertyForm(id) {
+  const p = id ? prop(id) : null;
+  openSheet(`
+    <h2>${p ? '✏️ Modifier le logement' : '+ Nouveau logement'}</h2>
+    <div class="card">
+      <label class="small muted">Nom</label>
+      <input id="f-name" placeholder="Ex. Studio Vieux-Port" value="${p ? p.name : ''}" style="${FIELD}">
+      <label class="small muted">Emoji</label>
+      <input id="f-emoji" placeholder="🏠" value="${p ? p.emoji : '🏠'}" style="${FIELD}">
+      <label class="small muted">Couleur</label>
+      <input id="f-color" type="color" value="${p ? p.color : '#14b8a6'}" style="width:100%;margin:6px 0 12px;height:42px;border-radius:10px;border:1px solid var(--line);background:var(--card2)">
+      <label class="small muted">Ville</label>
+      <input id="f-city" value="${p ? p.city : ''}" style="${FIELD}">
+      <label class="small muted">Adresse</label>
+      <input id="f-address" value="${p ? p.address : ''}" style="${FIELD}">
+      <div style="display:flex;gap:10px">
+        <div style="flex:1"><label class="small muted">Capacité</label>
+          <input id="f-cap" type="number" min="1" value="${p ? p.cap : 2}" style="margin-top:6px;padding:10px;border-radius:10px;background:var(--card2);color:var(--txt);border:1px solid var(--line);width:100%"></div>
+        <div style="flex:1"><label class="small muted">Prix de base / nuit</label>
+          <input id="f-base" type="number" min="0" value="${p ? p.base : 80}" style="margin-top:6px;padding:10px;border-radius:10px;background:var(--card2);color:var(--txt);border:1px solid var(--line);width:100%"></div>
+      </div>
+      <label class="small muted" style="display:block;margin-top:12px">Wifi (nom du réseau)</label>
+      <input id="f-wifi" value="${p ? p.wifi : ''}" style="${FIELD}">
+      <label class="small muted">Mot de passe wifi</label>
+      <input id="f-wifiPass" value="${p ? p.wifiPass : ''}" style="${FIELD}">
+      <label class="small muted">Code porte</label>
+      <input id="f-code" value="${p ? p.code : ''}" style="${FIELD}">
+    </div>
+    <button class="btn block" data-save-prop="${id || ''}">${p ? 'Enregistrer' : 'Créer le logement'}</button>
+    ${p ? `<button class="btn ghost block" style="margin-top:8px" data-delete-prop="${id}">🗑️ Supprimer ce logement</button>` : ''}
+  `);
+}
+function saveProperty(sg, id) {
+  const name = sg.querySelector('#f-name').value.trim();
+  if (!name) { toast('Le nom est obligatoire'); return; }
+  const data = {
+    name,
+    emoji: sg.querySelector('#f-emoji').value.trim() || '🏠',
+    color: sg.querySelector('#f-color').value,
+    city: sg.querySelector('#f-city').value.trim(),
+    address: sg.querySelector('#f-address').value.trim(),
+    cap: +sg.querySelector('#f-cap').value || 1,
+    base: +sg.querySelector('#f-base').value || 0,
+    wifi: sg.querySelector('#f-wifi').value.trim(),
+    wifiPass: sg.querySelector('#f-wifiPass').value.trim(),
+    code: sg.querySelector('#f-code').value.trim(),
+  };
+  if (id) {
+    Object.assign(prop(id), data);
+  } else {
+    S.properties.push({ id: 'p' + Date.now().toString(36), ...data });
+  }
+  save(); closeSheet(); toast('✅ Logement enregistré'); render();
+}
+function deleteProperty(id) {
+  if (!confirm('Supprimer ce logement et toutes ses données (réservations, ménage) ?')) return;
+  S.properties = S.properties.filter(p => p.id !== id);
+  const removedBookingIds = S.bookings.filter(b => b.pid === id).map(b => b.id);
+  S.bookings = S.bookings.filter(b => b.pid !== id);
+  removedBookingIds.forEach(bid => delete S.conversations[bid]);
+  S.cleaning = S.cleaning.filter(c => c.pid !== id);
+  if (S.activePid === id) S.activePid = 'all';
+  save(); closeSheet(); toast('Logement supprimé'); render();
 }
 
 // Ajouter une réservation
 function sheetAdd() {
+  if (!S.properties.length) {
+    openSheet(`<h2>+ Nouvelle réservation</h2><div class="empty small">Ajoutez d'abord un logement dans Réglages → Logements.</div>`);
+    return;
+  }
   openSheet(`
     <h2>+ Nouvelle réservation</h2>
     <div class="card">
@@ -749,12 +832,15 @@ function saveAdd(sg) {
   if (clash) { toast('⛔ Conflit : dates déjà réservées sur ce logement'); return; }
   const p = prop(pid);
   const id = 'b' + Date.now().toString(36);
-  S.bookings.push({ id, pid, plat, guest: g, checkIn: inIso, checkOut: outIso, nights, guests,
-    amount: p.base * nights, avatarColor: '#14b8a6', review: null, note: '' });
-  S.conversations[id] = { unread: 0, msgs: [
-    { from:'host', text:`Bonjour ${g.split(' ')[0]}, votre réservation ${p.emoji} ${p.name} est confirmée ✅`,
-      at:`${D(0)} 12:00`, isAuto:true }
-  ]};
+  const newBooking = { id, pid, plat, guest: g, checkIn: inIso, checkOut: outIso, nights, guests,
+    amount: p.base * nights, avatarColor: '#14b8a6', review: null, note: '' };
+  S.bookings.push(newBooking);
+  S.cleaning.push({ id: 'c' + id, pid, date: outIso, bookingId: id, cleaner: '',
+    status: outIso < D(0) ? 'done' : outIso === D(0) ? 'todo' : 'planned' });
+  const confirmText = renderAutoTemplate('reservation', newBooking);
+  S.conversations[id] = { unread: 0, msgs: confirmText ? [
+    { from:'host', text: confirmText, at:`${D(0)} 12:00`, isAuto:true }
+  ] : [] };
   save(); closeSheet(); toast('✅ Réservation créée'); render();
 }
 
@@ -774,7 +860,7 @@ function bindCommon(root) {
   });
   root.querySelectorAll('[data-rf]').forEach(el => el.onclick = () => { resaFilter = el.dataset.rf; render(); });
   root.querySelectorAll('[data-more]').forEach(el => el.onclick = () => {
-    ({ cleaning: sheetCleaning, livret: sheetLivret, pricing: sheetPricing,
+    ({ cleaning: sheetCleaning, automsg: sheetAutoMessages, livret: sheetLivret, pricing: sheetPricing,
        guests: sheetGuests, stats: sheetStats, settings: sheetSettings }[el.dataset.more])();
   });
   // Thread actions
@@ -797,6 +883,7 @@ function bindCommon(root) {
     if (!confirm('Annuler cette réservation ?')) return;
     S.bookings = S.bookings.filter(b => b.id !== el.dataset.cancel);
     delete S.conversations[el.dataset.cancel];
+    S.cleaning = S.cleaning.filter(c => c.bookingId !== el.dataset.cancel);
     save(); closeSheet(); toast('Réservation annulée'); render();
   });
   root.querySelectorAll('[data-clean]').forEach(el => el.onclick = () => {
@@ -804,16 +891,46 @@ function bindCommon(root) {
     c.status = c.status === 'planned' ? 'todo' : c.status === 'todo' ? 'done' : 'planned';
     save(); closeSheet(); sheetCleaning();
   });
+  root.querySelectorAll('[data-clean-assign]').forEach(el => el.onchange = () => {
+    const c = S.cleaning.find(x => x.id === el.dataset.cleanAssign);
+    c.cleaner = el.value; save();
+  });
+  root.querySelectorAll('[data-manage-cleaners]').forEach(el => el.onclick = () => { closeSheet(); sheetCleaners(); });
+  root.querySelectorAll('[data-toggle-auto]').forEach(el => el.onchange = () => {
+    const m = S.autoMessages.find(x => x.id === el.dataset.toggleAuto);
+    m.enabled = el.checked; save();
+  });
+  root.querySelectorAll('[data-tpl-auto]').forEach(el => el.onblur = () => {
+    const m = S.autoMessages.find(x => x.id === el.dataset.tplAuto);
+    m.template = el.value; save();
+  });
+  root.querySelectorAll('[data-add-cleaner]').forEach(el => el.onclick = () => {
+    const inp = document.getElementById('f-cleaner');
+    const name = inp.value.trim();
+    if (!name) return;
+    if (!S.cleaners.includes(name)) S.cleaners.push(name);
+    save(); closeSheet(); sheetCleaners();
+  });
+  root.querySelectorAll('[data-remove-cleaner]').forEach(el => el.onclick = () => {
+    const name = el.dataset.removeCleaner;
+    S.cleaners = S.cleaners.filter(c => c !== name);
+    S.cleaning.forEach(c => { if (c.cleaner === name) c.cleaner = ''; });
+    save(); closeSheet(); sheetCleaners();
+  });
   root.querySelectorAll('[data-livret]').forEach(el => el.onclick = () => {
     S.activePid = el.dataset.livret; save(); closeSheet(); sheetLivret();
   });
   root.querySelectorAll('[data-share]').forEach(el => el.onclick = () => toast('🔗 Lien du livret copié'));
   root.querySelectorAll('[data-apply-price]').forEach(el => el.onclick = () => { closeSheet(); toast('✅ Prix conseillés appliqués'); });
   root.querySelectorAll('[data-reset]').forEach(el => el.onclick = () => {
-    if (!confirm('Réinitialiser toutes les données de démo ?')) return;
-    localStorage.removeItem(KEY); load(); closeSheet(); toast('♻️ Démo réinitialisée'); render();
+    if (!confirm('Réinitialiser toutes les données de l\'application ?')) return;
+    localStorage.removeItem(KEY); load(); closeSheet(); toast('♻️ Application réinitialisée'); render();
   });
   root.querySelectorAll('[data-save-add]').forEach(el => el.onclick = () => saveAdd(document.querySelector('.sheet-bg')));
+  root.querySelectorAll('[data-add-prop]').forEach(el => el.onclick = () => { closeSheet(); sheetPropertyForm(); });
+  root.querySelectorAll('[data-edit-prop]').forEach(el => el.onclick = () => { closeSheet(); sheetPropertyForm(el.dataset.editProp); });
+  root.querySelectorAll('[data-save-prop]').forEach(el => el.onclick = () => saveProperty(document.querySelector('.sheet-bg'), el.dataset.saveProp || null));
+  root.querySelectorAll('[data-delete-prop]').forEach(el => el.onclick = () => deleteProperty(el.dataset.deleteProp));
 }
 // Re-câbler dans les sheets injectées
 const _openSheet = openSheet;
