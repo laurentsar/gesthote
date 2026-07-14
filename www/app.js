@@ -377,6 +377,7 @@ function aiSuggest(convId) {
 function vPlus() {
   const items = [
     ['cleaning', '🧹', 'Ménage & turnover', `${S.cleaning.filter(c=>c.status!=='done').length} à venir`],
+    ['checkio', '🔑', 'Check-in / Check-out', 'Codes, piscine, jacuzzi, arrosage'],
     ['automsg', '🔔', 'Messages automatiques', `${S.autoMessages.filter(m=>m.enabled).length}/${S.autoMessages.length} actifs`],
     ['livret', '📗', "Livret d'accueil", 'Guide voyageur digital'],
     ['pricing', '💶', 'Tarification dynamique', 'Recommandations IA'],
@@ -544,14 +545,15 @@ function sheetCleaning() {
     const b = booking(c.bookingId), p = prop(c.pid);
     const st = { done:['ok','Fait'], todo:['warn','À faire'], planned:['info','Planifié'] }[c.status];
     const nextIn = S.bookings.find(x => x.pid === c.pid && x.checkIn === c.date);
-    return `<div class="row">
+    return `<div class="row" style="align-items:flex-start;flex-wrap:wrap">
       <div class="avatar" style="background:${p.color}">${p.emoji}</div>
       <div class="grow"><div class="title small">${p.name}</div>
         <div class="tiny muted">${fmtDateJ(c.date)}${nextIn?` · arrivée ${nextIn.guest.split(' ')[0]} même jour`:''}</div>
         <select data-clean-assign="${c.id}" style="margin-top:6px;padding:6px 8px;border-radius:8px;background:var(--card2);color:var(--txt);border:1px solid var(--line);font-size:12px">
           <option value="">— Qui fait le ménage ? —</option>
           ${S.cleaners.map(name => `<option value="${name}" ${c.cleaner===name?'selected':''}>${name}</option>`).join('')}
-        </select></div>
+        </select>
+        <textarea data-clean-comment="${c.id}" placeholder="Commentaire (ex. clé cachée, linge à racheter, panne signalée…)" rows="2" style="margin-top:6px;width:100%;padding:8px;border-radius:8px;background:var(--card2);color:var(--txt);border:1px solid var(--line);font:inherit;font-size:12px;resize:vertical">${c.comment || ''}</textarea></div>
       <button class="badge ${st[0]}" data-clean="${c.id}">${st[1]}</button>
     </div>`;
   };
@@ -619,6 +621,39 @@ function sheetLivret() {
   `);
 }
 
+// Check-in / Check-out : accès et entretien par logement
+function sheetCheckInOut() {
+  if (!S.properties.length) {
+    openSheet(`<h2>🔑 Check-in / Check-out</h2><div class="empty small">Ajoutez d'abord un logement dans Réglages pour gérer ses accès et son entretien.</div>`);
+    return;
+  }
+  const p = S.activePid === 'all' ? S.properties[0] : prop(S.activePid);
+  openSheet(`
+    <h2>🔑 Check-in / Check-out</h2>
+    <div class="chips">${S.properties.map(x => `<button class="chip ${x.id===p.id?'ai':''}" data-checkio="${x.id}">${x.emoji} ${x.name}</button>`).join('')}</div>
+
+    <div class="sec-title">Accès</div>
+    <div class="card">
+      <label class="small muted">Code boîte à clé</label>
+      <input data-checkio-code="${p.id}" value="${p.code || ''}" style="${FIELD}">
+      <label class="small muted">Commentaire</label>
+      <textarea data-checkio-comment="${p.id}" rows="3" style="width:100%;margin:6px 0 0;padding:11px;border-radius:10px;background:var(--card2);color:var(--txt);border:1px solid var(--line);font:inherit;resize:vertical">${p.checkioComment || ''}</textarea>
+    </div>
+
+    <div class="sec-title">Entretien</div>
+    <div class="card">
+      <label class="small muted">🧪 Chlore piscine — dernier passage</label>
+      <input type="date" data-checkio-date="${p.id}|poolChlorineDate" value="${p.poolChlorineDate || ''}" style="${FIELD}">
+      <label class="small muted">🛁 Jacuzzi vidé le</label>
+      <input type="date" data-checkio-date="${p.id}|jacuzziEmptiedDate" value="${p.jacuzziEmptiedDate || ''}" style="${FIELD}">
+      <label class="small muted">🛁 Jacuzzi rempli le</label>
+      <input type="date" data-checkio-date="${p.id}|jacuzziFilledDate" value="${p.jacuzziFilledDate || ''}" style="${FIELD}">
+      <label class="small muted">🌿 Arrosé le</label>
+      <input type="date" data-checkio-date="${p.id}|wateredDate" value="${p.wateredDate || ''}" style="width:100%;margin:6px 0 0;padding:11px;border-radius:10px;background:var(--card2);color:var(--txt);border:1px solid var(--line)">
+    </div>
+  `);
+}
+
 // Tarification dynamique (amélioration IA)
 function sheetPricing() {
   const props = S.activePid === 'all' ? S.properties : [prop(S.activePid)];
@@ -672,8 +707,13 @@ function sheetGuests() {
 }
 
 // Statistiques
+let statsFilter = { mode: 'all', month: D(0).slice(0,7), year: D(0).slice(0,4) };
 function sheetStats() {
-  const bks = S.bookings;
+  const bks = S.bookings.filter(b => {
+    if (statsFilter.mode === 'month') return b.checkIn.slice(0,7) === statsFilter.month;
+    if (statsFilter.mode === 'year') return b.checkIn.slice(0,4) === statsFilter.year;
+    return true;
+  });
   const rev = bks.reduce((s,b)=>s+b.amount,0);
   const nights = bks.reduce((s,b)=>s+b.nights,0);
   const byPlat = {};
@@ -681,6 +721,13 @@ function sheetStats() {
   const max = Math.max(1, ...Object.values(byPlat));
   openSheet(`
     <h2>📈 Statistiques</h2>
+    <div class="btn-row even" style="margin-bottom:10px">
+      <button class="btn ${statsFilter.mode==='all'?'':'ghost'} sm" data-stats-mode="all">Tout</button>
+      <button class="btn ${statsFilter.mode==='month'?'':'ghost'} sm" data-stats-mode="month">Mois</button>
+      <button class="btn ${statsFilter.mode==='year'?'':'ghost'} sm" data-stats-mode="year">Année</button>
+    </div>
+    ${statsFilter.mode==='month' ? `<input type="month" data-stats-month value="${statsFilter.month}" style="${FIELD}">` : ''}
+    ${statsFilter.mode==='year' ? `<input type="number" data-stats-year value="${statsFilter.year}" min="2000" max="2100" style="${FIELD}">` : ''}
     <div class="kpis">
       <div class="kpi"><div class="v">${money(rev)}</div><div class="l">Revenu total</div></div>
       <div class="kpi"><div class="v">${money(nights ? Math.round(rev/nights) : 0)}</div><div class="l">Prix moyen / nuit</div></div>
@@ -704,7 +751,7 @@ function sheetSettings() {
     <h2>⚙️ Réglages</h2>
     <div class="sec-title">Logements</div>
     <div class="card">${S.properties.length ? S.properties.map(p => `<div class="row" data-edit-prop="${p.id}" style="cursor:pointer">
-      <div class="avatar" style="background:${p.color}">${p.emoji}</div>
+      <img src="img/logo-chalets-du-pialou.jpg" alt="" class="avatar" style="object-fit:cover">
       <div class="grow"><div class="title small">${p.name}</div><div class="tiny muted">${p.city || 'Ville non renseignée'} · base ${p.base}€</div></div>
       <span class="dim">›</span>
     </div>`).join('') : '<div class="empty small">Aucun logement — ajoutez le premier ci-dessous</div>'}</div>
@@ -731,39 +778,63 @@ function sheetPropertyForm(id) {
   const p = id ? prop(id) : null;
   openSheet(`
     <h2>${p ? '✏️ Modifier le logement' : '+ Nouveau logement'}</h2>
+
+    <div class="sec-title">Identité</div>
     <div class="card">
       <label class="small muted">Nom</label>
-      <input id="f-name" placeholder="Ex. Studio Vieux-Port" value="${p ? p.name : ''}" style="${FIELD}">
-      <label class="small muted">Emoji</label>
-      <input id="f-emoji" placeholder="🏠" value="${p ? p.emoji : '🏠'}" style="${FIELD}">
-      <label class="small muted">Couleur</label>
-      <input id="f-color" type="color" value="${p ? p.color : '#14b8a6'}" style="width:100%;margin:6px 0 12px;height:42px;border-radius:10px;border:1px solid var(--line);background:var(--card2)">
+      <input id="f-name" placeholder="Ex. Studio Vieux-Port" value="${p ? p.name : ''}" style="${FIELD}" autofocus>
+      <div style="display:flex;gap:10px">
+        <div style="flex:1"><label class="small muted">Emoji</label>
+          <input id="f-emoji" placeholder="🏠" value="${p ? p.emoji : '🏠'}" style="margin-top:6px;padding:10px;border-radius:10px;background:var(--card2);color:var(--txt);border:1px solid var(--line);width:100%"></div>
+        <div style="flex:1"><label class="small muted">Couleur</label>
+          <input id="f-color" type="color" value="${p ? p.color : '#14b8a6'}" style="width:100%;margin-top:6px;height:42px;border-radius:10px;border:1px solid var(--line);background:var(--card2)"></div>
+      </div>
+    </div>
+
+    <div class="sec-title">Adresse</div>
+    <div class="card">
       <label class="small muted">Ville</label>
       <input id="f-city" value="${p ? p.city : ''}" style="${FIELD}">
       <label class="small muted">Adresse</label>
-      <input id="f-address" value="${p ? p.address : ''}" style="${FIELD}">
+      <input id="f-address" value="${p ? p.address : ''}" style="width:100%;margin:6px 0 0;padding:11px;border-radius:10px;background:var(--card2);color:var(--txt);border:1px solid var(--line)">
+    </div>
+
+    <div class="sec-title">Capacité &amp; tarif</div>
+    <div class="card">
       <div style="display:flex;gap:10px">
-        <div style="flex:1"><label class="small muted">Capacité</label>
-          <input id="f-cap" type="number" min="1" value="${p ? p.cap : 2}" style="margin-top:6px;padding:10px;border-radius:10px;background:var(--card2);color:var(--txt);border:1px solid var(--line);width:100%"></div>
+        <div style="flex:1"><label class="small muted">Capacité (voyageurs)</label>
+          <input id="f-cap" type="number" inputmode="numeric" min="1" value="${p ? p.cap : 2}" style="margin-top:6px;padding:10px;border-radius:10px;background:var(--card2);color:var(--txt);border:1px solid var(--line);width:100%"></div>
         <div style="flex:1"><label class="small muted">Prix de base / nuit</label>
-          <input id="f-base" type="number" min="0" value="${p ? p.base : 80}" style="margin-top:6px;padding:10px;border-radius:10px;background:var(--card2);color:var(--txt);border:1px solid var(--line);width:100%"></div>
+          <input id="f-base" type="number" inputmode="numeric" min="0" value="${p ? p.base : 80}" style="margin-top:6px;padding:10px;border-radius:10px;background:var(--card2);color:var(--txt);border:1px solid var(--line);width:100%"></div>
       </div>
-      <label class="small muted" style="display:block;margin-top:12px">Wifi (nom du réseau)</label>
+    </div>
+
+    <div class="sec-title">Accès voyageur</div>
+    <div class="card">
+      <label class="small muted">Wifi (nom du réseau)</label>
       <input id="f-wifi" value="${p ? p.wifi : ''}" style="${FIELD}">
       <label class="small muted">Mot de passe wifi</label>
       <input id="f-wifiPass" value="${p ? p.wifiPass : ''}" style="${FIELD}">
       <label class="small muted">Code porte</label>
-      <input id="f-code" value="${p ? p.code : ''}" style="${FIELD}">
-      <label class="small muted" style="display:block;margin-top:4px">URL iCal Booking.com</label>
+      <input id="f-code" value="${p ? p.code : ''}" style="width:100%;margin:6px 0 0;padding:11px;border-radius:10px;background:var(--card2);color:var(--txt);border:1px solid var(--line)">
+    </div>
+
+    <div class="sec-title">Synchronisation Booking.com</div>
+    <div class="card">
+      <label class="small muted">URL iCal</label>
       <input id="f-ical" placeholder="https://admin.booking.com/.../calendar.ics" value="${p ? (p.icalUrl || '') : ''}" style="${FIELD}">
       <div class="tiny muted" style="margin-top:-8px">Extranet Booking.com → Réglages → Calendrier → Synchroniser les calendriers → copier le lien d'export iCal. Synchro en lecture seule : bloque les dates, ne remonte pas le nom du voyageur.</div>
+      ${p && p.icalUrl ? `<div class="small muted" style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:12px">
+        <span>Dernière synchro : ${p.icalLastSync ? fmtDateJ(iso(p.icalLastSync)) + ' ' + new Date(p.icalLastSync).toTimeString().slice(0,5) : 'jamais'}</span>
+        <button class="btn ghost sm" data-sync-ical="${id}">🔄 Synchroniser</button>
+      </div>` : ''}
     </div>
-    ${p && p.icalUrl ? `<div class="card small muted" style="display:flex;justify-content:space-between;align-items:center;gap:10px">
-      <span>Dernière synchro Booking.com : ${p.icalLastSync ? fmtDateJ(iso(p.icalLastSync)) + ' ' + new Date(p.icalLastSync).toTimeString().slice(0,5) : 'jamais'}</span>
-      <button class="btn ghost sm" data-sync-ical="${id}">🔄 Synchroniser</button>
-    </div>` : ''}
-    <button class="btn block" data-save-prop="${id || ''}">${p ? 'Enregistrer' : 'Créer le logement'}</button>
-    ${p ? `<button class="btn ghost block" style="margin-top:8px" data-delete-prop="${id}">🗑️ Supprimer ce logement</button>` : ''}
+
+    <div class="btn-row even" style="margin-top:4px">
+      <button class="btn ghost" data-cancel-prop>Annuler</button>
+      <button class="btn" data-save-prop="${id || ''}">${p ? 'Enregistrer' : 'Créer le logement'}</button>
+    </div>
+    ${p ? `<button class="btn danger block" style="margin-top:10px" data-delete-prop="${id}">🗑️ Supprimer ce logement</button>` : ''}
   `);
 }
 function saveProperty(sg, id) {
@@ -787,7 +858,7 @@ function saveProperty(sg, id) {
   } else {
     S.properties.push({ id: 'p' + Date.now().toString(36), ...data });
   }
-  save(); closeSheet(); toast('✅ Logement enregistré'); render();
+  save(); closeSheet(); toast('✅ Logement enregistré'); render(); sheetSettings();
 }
 function deleteProperty(id) {
   if (!confirm('Supprimer ce logement et toutes ses données (réservations, ménage) ?')) return;
@@ -797,7 +868,7 @@ function deleteProperty(id) {
   removedBookingIds.forEach(bid => delete S.conversations[bid]);
   S.cleaning = S.cleaning.filter(c => c.pid !== id);
   if (S.activePid === id) S.activePid = 'all';
-  save(); closeSheet(); toast('Logement supprimé'); render();
+  save(); closeSheet(); toast('Logement supprimé'); render(); sheetSettings();
 }
 
 // ---------- Synchronisation iCal Booking.com (lecture seule) ----------
@@ -904,7 +975,7 @@ function saveAdd(sg) {
   const newBooking = { id, pid, plat, guest: g, checkIn: inIso, checkOut: outIso, nights, guests,
     amount: p.base * nights, avatarColor: '#14b8a6', review: null, note: '' };
   S.bookings.push(newBooking);
-  S.cleaning.push({ id: 'c' + id, pid, date: outIso, bookingId: id, cleaner: '',
+  S.cleaning.push({ id: 'c' + id, pid, date: outIso, bookingId: id, cleaner: '', comment: '',
     status: outIso < D(0) ? 'done' : outIso === D(0) ? 'todo' : 'planned' });
   const confirmText = renderAutoTemplate('reservation', newBooking);
   S.conversations[id] = { unread: 0, msgs: confirmText ? [
@@ -929,7 +1000,7 @@ function bindCommon(root) {
   });
   root.querySelectorAll('[data-rf]').forEach(el => el.onclick = () => { resaFilter = el.dataset.rf; render(); });
   root.querySelectorAll('[data-more]').forEach(el => el.onclick = () => {
-    ({ cleaning: sheetCleaning, automsg: sheetAutoMessages, livret: sheetLivret, pricing: sheetPricing,
+    ({ cleaning: sheetCleaning, checkio: sheetCheckInOut, automsg: sheetAutoMessages, livret: sheetLivret, pricing: sheetPricing,
        guests: sheetGuests, stats: sheetStats, settings: sheetSettings }[el.dataset.more])();
   });
   // Thread actions
@@ -963,6 +1034,32 @@ function bindCommon(root) {
   root.querySelectorAll('[data-clean-assign]').forEach(el => el.onchange = () => {
     const c = S.cleaning.find(x => x.id === el.dataset.cleanAssign);
     c.cleaner = el.value; save();
+  });
+  root.querySelectorAll('[data-clean-comment]').forEach(el => el.onblur = () => {
+    const c = S.cleaning.find(x => x.id === el.dataset.cleanComment);
+    c.comment = el.value; save();
+  });
+  root.querySelectorAll('[data-checkio]').forEach(el => el.onclick = () => {
+    S.activePid = el.dataset.checkio; save(); closeSheet(); sheetCheckInOut();
+  });
+  root.querySelectorAll('[data-checkio-code]').forEach(el => el.onblur = () => {
+    prop(el.dataset.checkioCode).code = el.value.trim(); save();
+  });
+  root.querySelectorAll('[data-checkio-comment]').forEach(el => el.onblur = () => {
+    prop(el.dataset.checkioComment).checkioComment = el.value; save();
+  });
+  root.querySelectorAll('[data-checkio-date]').forEach(el => el.onchange = () => {
+    const [pid, field] = el.dataset.checkioDate.split('|');
+    prop(pid)[field] = el.value; save();
+  });
+  root.querySelectorAll('[data-stats-mode]').forEach(el => el.onclick = () => {
+    statsFilter.mode = el.dataset.statsMode; closeSheet(); sheetStats();
+  });
+  root.querySelectorAll('[data-stats-month]').forEach(el => el.onchange = () => {
+    statsFilter.month = el.value; closeSheet(); sheetStats();
+  });
+  root.querySelectorAll('[data-stats-year]').forEach(el => el.onchange = () => {
+    statsFilter.year = el.value; closeSheet(); sheetStats();
   });
   root.querySelectorAll('[data-manage-cleaners]').forEach(el => el.onclick = () => { closeSheet(); sheetCleaners(); });
   root.querySelectorAll('[data-toggle-auto]').forEach(el => el.onchange = () => {
@@ -998,6 +1095,7 @@ function bindCommon(root) {
   root.querySelectorAll('[data-save-add]').forEach(el => el.onclick = () => saveAdd(document.querySelector('.sheet-bg')));
   root.querySelectorAll('[data-add-prop]').forEach(el => el.onclick = () => { closeSheet(); sheetPropertyForm(); });
   root.querySelectorAll('[data-edit-prop]').forEach(el => el.onclick = () => { closeSheet(); sheetPropertyForm(el.dataset.editProp); });
+  root.querySelectorAll('[data-cancel-prop]').forEach(el => el.onclick = () => { closeSheet(); sheetSettings(); });
   root.querySelectorAll('[data-save-prop]').forEach(el => el.onclick = () => saveProperty(document.querySelector('.sheet-bg'), el.dataset.saveProp || null));
   root.querySelectorAll('[data-delete-prop]').forEach(el => el.onclick = () => deleteProperty(el.dataset.deleteProp));
   root.querySelectorAll('[data-sync-ical]').forEach(el => el.onclick = () => importIcal(el.dataset.syncIcal));
