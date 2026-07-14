@@ -67,7 +67,7 @@ let TAB = 'home';
 const app = document.getElementById('app');
 
 function render() {
-  const views = { home: vHome, plan: vPlanning, resa: vResa, msg: vMessages, plus: vPlus };
+  const views = { home: vHome, plan: vPlanning, plus: vPlus };
   const body = (views[TAB] || vHome)();
   app.innerHTML = `<div class="screen">${body}</div>${nav()}`;
   wire();
@@ -75,17 +75,14 @@ function render() {
 }
 
 function nav() {
-  const unread = Object.values(S.conversations).reduce((n, c) => n + (c.unread || 0), 0);
   const items = [
     ['home', '📊', 'Tableau'],
     ['plan', '📅', 'Planning'],
-    ['resa', '📖', 'Résas'],
-    ['msg', '💬', 'Messages'],
     ['plus', '☰', 'Plus'],
   ];
   return `<div class="nav">${items.map(([k, ic, l]) => `
     <button data-tab="${k}" class="${TAB === k ? 'active' : ''}">
-      <span class="wrap"><span class="ico">${ic}</span>${k === 'msg' && unread ? `<span class="badge-dot"></span>` : ''}<span>${l}</span></span>
+      <span class="wrap"><span class="ico">${ic}</span><span>${l}</span></span>
     </button>`).join('')}</div>`;
 }
 
@@ -253,103 +250,8 @@ function vPlanning() {
   <div class="small muted" style="margin-top:6px">
     <span class="badge plat b-airbnb">Airbnb</span> <span class="badge plat b-booking">Booking</span>
     <span class="badge plat b-direct">Direct</span> <span class="badge plat b-abritel">Abritel</span>
-  </div>
-  <div class="card" style="margin-top:12px">
-    <h2>🔄 Synchronisation Booking.com</h2>
-    <div class="small muted" style="margin-bottom:8px">Import iCal en lecture seule : bloque les dates réservées côté Booking.com pour éviter le surbooking.</div>
-    ${S.properties.length ? S.properties.map(p => `<div class="row">
-      <div class="grow"><div class="title small">${p.emoji} ${p.name}</div>
-        <div class="tiny muted">${p.icalUrl ? (p.icalLastSync ? 'Dernière synchro : ' + fmtDateJ(iso(p.icalLastSync)) + ' ' + new Date(p.icalLastSync).toTimeString().slice(0,5) : 'Jamais synchronisé') : 'Aucune URL iCal configurée'}</div></div>
-      ${p.icalUrl ? `<button class="btn ghost sm" data-sync-ical="${p.id}">🔄 Synchroniser</button>`
-        : `<button class="btn ghost sm" data-edit-prop="${p.id}">Configurer</button>`}
-    </div>`).join('') : '<div class="empty small">Ajoutez un logement pour activer la synchro.</div>'}
-    <div class="tiny muted" style="margin-top:8px">Airbnb / Abritel : pas de synchro automatique pour l'instant (nécessite un partenariat officiel). En attendant, leur export iCal peut être ajouté de la même façon.</div>
   </div>`;
 }
-
-// ================= RÉSERVATIONS =================
-let resaFilter = 'all';
-function vResa() {
-  const all = filtered(S.bookings);
-  const groups = {
-    all: all,
-    inhouse: all.filter(b => b.checkIn <= D(0) && b.checkOut > D(0)),
-    upcoming: all.filter(b => b.checkIn > D(0)),
-    past: all.filter(b => b.checkOut <= D(0)),
-  };
-  const list = groups[resaFilter].slice().sort((a, b) => a.checkIn.localeCompare(b.checkIn));
-  const tab = (k, l) => `<button class="chip ${resaFilter===k?'ai':''}" data-rf="${k}">${l} (${groups[k].length})</button>`;
-
-  const card = b => {
-    const p = prop(b.pid);
-    const status = b.checkOut <= D(0) ? ['muted','Terminé']
-      : b.checkIn <= D(0) ? ['ok','Sur place'] : ['info','À venir'];
-    return `<div class="card" data-open="${b.id}" style="cursor:pointer">
-      <div class="row" style="border:0;padding:0">
-        <div class="avatar" style="background:${b.avatarColor}">${b.guest[0]}</div>
-        <div class="grow"><div class="title">${b.guest}</div>
-          <div class="small muted ellipsis">${p.emoji} ${p.name}</div></div>
-        <div style="text-align:right">
-          <span class="badge plat ${PLAT[b.plat].cls}">${PLAT[b.plat].label}</span>
-          <div class="small" style="font-weight:800;margin-top:5px">${money(b.amount)}</div>
-        </div>
-      </div>
-      <div class="row" style="border:0;padding:8px 0 0;color:var(--txt2)">
-        <span class="small">📅 ${fmtDate(b.checkIn)} → ${fmtDate(b.checkOut)} · ${b.nights} nuits</span>
-        <span class="spacer" style="flex:1"></span>
-        <span class="badge ${status[0]}">${status[1]}</span>
-      </div>
-    </div>`;
-  };
-
-  return `
-  <div class="topbar"><h1>Réservations</h1><span class="spacer"></span>
-    <button class="btn sm" data-add>+ Résa</button></div>
-  ${propSwitch()}
-  <div class="chips">${tab('all','Toutes')}${tab('inhouse','Sur place')}${tab('upcoming','À venir')}${tab('past','Passées')}</div>
-  ${list.length ? list.map(card).join('') :
-    '<div class="empty"><div class="ico">📖</div>Aucune réservation</div>'}`;
-}
-
-// ================= MESSAGES =================
-function vMessages() {
-  const convs = Object.entries(S.conversations)
-    .map(([id, c]) => ({ id, c, b: booking(id) }))
-    .filter(x => x.b && (S.activePid === 'all' || x.b.pid === S.activePid))
-    .sort((a, b) => lastAt(b.c).localeCompare(lastAt(a.c)));
-
-  const row = ({ id, c, b }) => {
-    const p = prop(b.pid);
-    const last = c.msgs[c.msgs.length - 1];
-    const guestLast = [...c.msgs].reverse().find(m => m.from === 'guest');
-    const sent = guestLast ? sentiment(guestLast.text) : null;
-    const sentIco = sent === 'neg' ? '⚠️' : sent === 'pos' ? '😊' : sent === 'neu' ? '💬' : '';
-    return `<div class="row" data-msg="${id}">
-      <div class="avatar" style="background:${b.avatarColor}">${b.guest[0]}</div>
-      <div class="grow">
-        <div class="title ellipsis">${b.guest} ${sentIco}</div>
-        <div class="small muted ellipsis">${last.from==='host'?'Vous : ':''}${last.text}</div>
-        <div class="tiny dim">${p.emoji} ${p.name}</div>
-      </div>
-      <div style="text-align:right">
-        ${c.unread ? '<span class="badge-dot" style="position:static;display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--bad)"></span>' : ''}
-        <div class="tiny dim">${last.at.slice(11)}</div>
-      </div>
-    </div>`;
-  };
-
-  return `
-  <div class="topbar"><h1>Messagerie</h1></div>
-  ${propSwitch()}
-  <div class="card small muted" style="display:flex;gap:8px;align-items:center">
-    <span>🤖</span><span>Boîte unifiée tous canaux · réponses IA suggérées · détection d'insatisfaction.</span>
-  </div>
-  <div class="card" style="padding:4px 14px">
-    ${convs.length ? convs.map(row).join('') :
-      '<div class="empty small">Aucune conversation</div>'}
-  </div>`;
-}
-const lastAt = c => c.msgs[c.msgs.length - 1].at;
 
 // Analyse de sentiment simplifiée (mock — remplacer par appel Claude API)
 function sentiment(txt) {
@@ -819,17 +721,6 @@ function sheetPropertyForm(id) {
       <input id="f-code" value="${p ? p.code : ''}" style="width:100%;margin:6px 0 0;padding:11px;border-radius:10px;background:var(--card2);color:var(--txt);border:1px solid var(--line)">
     </div>
 
-    <div class="sec-title">Synchronisation Booking.com</div>
-    <div class="card">
-      <label class="small muted">URL iCal</label>
-      <input id="f-ical" placeholder="https://admin.booking.com/.../calendar.ics" value="${p ? (p.icalUrl || '') : ''}" style="${FIELD}">
-      <div class="tiny muted" style="margin-top:-8px">Extranet Booking.com → Réglages → Calendrier → Synchroniser les calendriers → copier le lien d'export iCal. Synchro en lecture seule : bloque les dates, ne remonte pas le nom du voyageur.</div>
-      ${p && p.icalUrl ? `<div class="small muted" style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:12px">
-        <span>Dernière synchro : ${p.icalLastSync ? fmtDateJ(iso(p.icalLastSync)) + ' ' + new Date(p.icalLastSync).toTimeString().slice(0,5) : 'jamais'}</span>
-        <button class="btn ghost sm" data-sync-ical="${id}">🔄 Synchroniser</button>
-      </div>` : ''}
-    </div>
-
     <div class="btn-row even" style="margin-top:4px">
       <button class="btn ghost" data-cancel-prop>Annuler</button>
       <button class="btn" data-save-prop="${id || ''}">${p ? 'Enregistrer' : 'Créer le logement'}</button>
@@ -851,7 +742,6 @@ function saveProperty(sg, id) {
     wifi: sg.querySelector('#f-wifi').value.trim(),
     wifiPass: sg.querySelector('#f-wifiPass').value.trim(),
     code: sg.querySelector('#f-code').value.trim(),
-    icalUrl: sg.querySelector('#f-ical').value.trim(),
   };
   if (id) {
     Object.assign(prop(id), data);
@@ -869,63 +759,6 @@ function deleteProperty(id) {
   S.cleaning = S.cleaning.filter(c => c.pid !== id);
   if (S.activePid === id) S.activePid = 'all';
   save(); closeSheet(); toast('Logement supprimé'); render(); sheetSettings();
-}
-
-// ---------- Synchronisation iCal Booking.com (lecture seule) ----------
-function parseIcal(text) {
-  const unfolded = text.replace(/\r\n[ \t]/g, '').replace(/\n[ \t]/g, '');
-  return unfolded.split('BEGIN:VEVENT').slice(1).map(block => {
-    const body = block.split('END:VEVENT')[0];
-    const grab = re => { const m = body.match(re); return m ? m[1].replace(/\r$/, '').trim() : null; };
-    const startRaw = grab(/DTSTART[^:\n]*:(\d{8})/);
-    const endRaw = grab(/DTEND[^:\n]*:(\d{8})/);
-    const toIso = raw => `${raw.slice(0,4)}-${raw.slice(4,6)}-${raw.slice(6,8)}`;
-    return {
-      start: startRaw ? toIso(startRaw) : null,
-      end: endRaw ? toIso(endRaw) : null,
-      uid: grab(/UID:(.+)/),
-      summary: grab(/SUMMARY:(.+)/),
-    };
-  }).filter(ev => ev.start && ev.end);
-}
-
-async function importIcal(propId) {
-  const p = prop(propId);
-  if (!p || !p.icalUrl) { toast('Aucune URL iCal configurée'); return; }
-  toast('🔄 Synchronisation Booking.com…');
-  let text;
-  try {
-    const res = await fetch(p.icalUrl, { cache: 'no-store' });
-    if (!res.ok) throw new Error('HTTP ' + res.status);
-    text = await res.text();
-  } catch (e) {
-    toast("⛔ Échec de la synchro — sur la version web, Booking.com bloque souvent l'accès direct (CORS) ; utilisez l'app Android.");
-    return;
-  }
-  const events = parseIcal(text);
-  let added = 0, updated = 0;
-  events.forEach(ev => {
-    const existing = S.bookings.find(b => b.pid === propId && b.icalUid === ev.uid);
-    if (existing) {
-      existing.checkIn = ev.start; existing.checkOut = ev.end;
-      existing.nights = nightsBetween(ev.start, ev.end);
-      updated++;
-    } else {
-      const id = 'bic' + Math.random().toString(36).slice(2, 9);
-      S.bookings.push({
-        id, pid: propId, plat: 'booking', guest: ev.summary || 'Réservation Booking.com',
-        checkIn: ev.start, checkOut: ev.end, nights: nightsBetween(ev.start, ev.end),
-        guests: p.cap, amount: 0, avatarColor: '#3b82f6', review: null, note: '',
-        icalUid: ev.uid, imported: true,
-      });
-      S.conversations[id] = { unread: 0, msgs: [] };
-      added++;
-    }
-  });
-  p.icalLastSync = new Date().toISOString();
-  save();
-  toast(`✅ Booking.com : ${added} ajoutée(s), ${updated} mise(s) à jour`);
-  closeSheet(); sheetPropertyForm(propId);
 }
 
 // Ajouter une réservation
@@ -998,7 +831,6 @@ function bindCommon(root) {
   root.querySelectorAll('[data-plan]').forEach(el => el.onclick = () => {
     const v = +el.dataset.plan; planStart = v === 0 ? 0 : planStart + v; render();
   });
-  root.querySelectorAll('[data-rf]').forEach(el => el.onclick = () => { resaFilter = el.dataset.rf; render(); });
   root.querySelectorAll('[data-more]').forEach(el => el.onclick = () => {
     ({ cleaning: sheetCleaning, checkio: sheetCheckInOut, automsg: sheetAutoMessages, livret: sheetLivret, pricing: sheetPricing,
        guests: sheetGuests, stats: sheetStats, settings: sheetSettings }[el.dataset.more])();
@@ -1098,7 +930,6 @@ function bindCommon(root) {
   root.querySelectorAll('[data-cancel-prop]').forEach(el => el.onclick = () => { closeSheet(); sheetSettings(); });
   root.querySelectorAll('[data-save-prop]').forEach(el => el.onclick = () => saveProperty(document.querySelector('.sheet-bg'), el.dataset.saveProp || null));
   root.querySelectorAll('[data-delete-prop]').forEach(el => el.onclick = () => deleteProperty(el.dataset.deleteProp));
-  root.querySelectorAll('[data-sync-ical]').forEach(el => el.onclick = () => importIcal(el.dataset.syncIcal));
 }
 // Re-câbler dans les sheets injectées
 const _openSheet = openSheet;
