@@ -1,4 +1,4 @@
 {
-  "version": "1.3.0",
-  "notes": "Retire la synchro iCal Booking.com et les onglets Résas/Messagerie (nav simplifiée à Tableau/Planning/Plus). Ajoute l'écran Check-in/Check-out (codes, piscine, jacuzzi, arrosage), le logo par logement, le filtre mois/année dans Statistiques, le commentaire par ménage, une carte de mise à jour avec changelog, et l'authentification par empreinte digitale (comptes Admin/Utilisateur)."
+  "version": "1.4.0",
+  "notes": "Authentification par mot de passe pour le compte Admin (Utilisateur entre sans mot de passe). Retire l'empreinte digitale au profit d'un mot de passe éditable dans Réglages → Comptes."
 }
