@@ -787,7 +787,7 @@ function saveProperty(sg, id) {
   } else {
     S.properties.push({ id: 'p' + Date.now().toString(36), ...data });
   }
-  save(); closeSheet(); toast('✅ Logement enregistré'); render();
+  save(); closeSheet(); toast('✅ Logement enregistré'); render(); sheetSettings();
 }
 function deleteProperty(id) {
   if (!confirm('Supprimer ce logement et toutes ses données (réservations, ménage) ?')) return;
@@ -797,7 +797,7 @@ function deleteProperty(id) {
   removedBookingIds.forEach(bid => delete S.conversations[bid]);
   S.cleaning = S.cleaning.filter(c => c.pid !== id);
   if (S.activePid === id) S.activePid = 'all';
-  save(); closeSheet(); toast('Logement supprimé'); render();
+  save(); closeSheet(); toast('Logement supprimé'); render(); sheetSettings();
 }
 
 // ---------- Synchronisation iCal Booking.com (lecture seule) ----------
