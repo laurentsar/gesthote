@@ -47,6 +47,7 @@ function seed() {
     cleaners: [],
     autoMessages: DEFAULT_AUTO_MESSAGES(),
     activePid: 'all',
+    accounts: { admin: { name: 'Admin' }, user: { name: 'Utilisateur' } },
     v: 2,
   };
 }
@@ -57,17 +58,63 @@ let S;
 function load() {
   try { S = JSON.parse(localStorage.getItem(KEY)); } catch (e) { S = null; }
   if (!S || S.v !== 2) { S = seed(); save(); }
+  if (!S.accounts) { S.accounts = seed().accounts; save(); }
 }
 function save() { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} }
 const prop = id => S.properties.find(p => p.id === id);
 const booking = id => S.bookings.find(b => b.id === id);
+
+// ---------- Authentification (empreinte digitale, APK Android uniquement) ----------
+// Sur web/PWA (pas de runtime Capacitor natif), l'app reste ouverte sans
+// restriction, comme avant. Sur l'APK, un verrou par empreinte s'affiche au
+// lancement et distingue deux rôles : admin (tout) et user (opérationnel).
+const isNative = () => !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
+let currentRole = isNative() ? null : 'admin';
+const isAdmin = () => currentRole === 'admin';
+
+function renderLock() {
+  app.innerHTML = `
+    <div class="screen" style="display:flex;flex-direction:column;justify-content:center;align-items:center;gap:22px;min-height:calc(100vh - var(--nav-h) - var(--safe-b) - var(--safe-t) - 32px);padding:24px;text-align:center">
+      <img src="img/logo-chalets-du-pialou.jpg" alt="" style="width:88px;height:88px;border-radius:20px;object-fit:cover">
+      <div><h1 style="margin:0 0 4px">GestHôte</h1><div class="small muted">Authentifiez-vous pour continuer</div></div>
+      <div style="display:flex;flex-direction:column;gap:12px;width:100%;max-width:320px">
+        <button class="btn block" data-login="admin">👤 ${S.accounts.admin.name}</button>
+        <button class="btn ghost block" data-login="user">👤 ${S.accounts.user.name}</button>
+      </div>
+      <div id="lock-msg" class="small muted"></div>
+    </div>`;
+  app.querySelectorAll('[data-login]').forEach(el => el.onclick = () => attemptLogin(el.dataset.login));
+}
+
+async function attemptLogin(role) {
+  const msg = document.getElementById('lock-msg');
+  const Bio = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.BiometricAuthNative;
+  if (!Bio) { currentRole = role; render(); return; }
+  try {
+    const check = await Bio.checkBiometry();
+    if (!check || !check.isAvailable) { currentRole = role; render(); return; }
+    await Bio.authenticate({
+      reason: 'Authentification pour ouvrir GestHôte',
+      cancelTitle: 'Annuler',
+      allowDeviceCredential: true,
+      androidTitle: 'GestHôte',
+      androidSubtitle: S.accounts[role].name,
+    });
+    currentRole = role;
+    render();
+  } catch (e) {
+    if (msg) msg.textContent = '⛔ Authentification annulée ou échouée — réessayez.';
+  }
+}
+
+function lockApp() { currentRole = null; renderLock(); }
 
 // ---------- Routeur ----------
 let TAB = 'home';
 const app = document.getElementById('app');
 
 function render() {
-  const views = { home: vHome, plan: vPlanning, resa: vResa, msg: vMessages, plus: vPlus };
+  const views = { home: vHome, plan: vPlanning, plus: vPlus };
   const body = (views[TAB] || vHome)();
   app.innerHTML = `<div class="screen">${body}</div>${nav()}`;
   wire();
@@ -75,17 +122,14 @@ function render() {
 }
 
 function nav() {
-  const unread = Object.values(S.conversations).reduce((n, c) => n + (c.unread || 0), 0);
   const items = [
     ['home', '📊', 'Tableau'],
     ['plan', '📅', 'Planning'],
-    ['resa', '📖', 'Résas'],
-    ['msg', '💬', 'Messages'],
     ['plus', '☰', 'Plus'],
   ];
   return `<div class="nav">${items.map(([k, ic, l]) => `
     <button data-tab="${k}" class="${TAB === k ? 'active' : ''}">
-      <span class="wrap"><span class="ico">${ic}</span>${k === 'msg' && unread ? `<span class="badge-dot"></span>` : ''}<span>${l}</span></span>
+      <span class="wrap"><span class="ico">${ic}</span><span>${l}</span></span>
     </button>`).join('')}</div>`;
 }
 
@@ -253,103 +297,8 @@ function vPlanning() {
   <div class="small muted" style="margin-top:6px">
     <span class="badge plat b-airbnb">Airbnb</span> <span class="badge plat b-booking">Booking</span>
     <span class="badge plat b-direct">Direct</span> <span class="badge plat b-abritel">Abritel</span>
-  </div>
-  <div class="card" style="margin-top:12px">
-    <h2>🔄 Synchronisation Booking.com</h2>
-    <div class="small muted" style="margin-bottom:8px">Import iCal en lecture seule : bloque les dates réservées côté Booking.com pour éviter le surbooking.</div>
-    ${S.properties.length ? S.properties.map(p => `<div class="row">
-      <div class="grow"><div class="title small">${p.emoji} ${p.name}</div>
-        <div class="tiny muted">${p.icalUrl ? (p.icalLastSync ? 'Dernière synchro : ' + fmtDateJ(iso(p.icalLastSync)) + ' ' + new Date(p.icalLastSync).toTimeString().slice(0,5) : 'Jamais synchronisé') : 'Aucune URL iCal configurée'}</div></div>
-      ${p.icalUrl ? `<button class="btn ghost sm" data-sync-ical="${p.id}">🔄 Synchroniser</button>`
-        : `<button class="btn ghost sm" data-edit-prop="${p.id}">Configurer</button>`}
-    </div>`).join('') : '<div class="empty small">Ajoutez un logement pour activer la synchro.</div>'}
-    <div class="tiny muted" style="margin-top:8px">Airbnb / Abritel : pas de synchro automatique pour l'instant (nécessite un partenariat officiel). En attendant, leur export iCal peut être ajouté de la même façon.</div>
   </div>`;
 }
-
-// ================= RÉSERVATIONS =================
-let resaFilter = 'all';
-function vResa() {
-  const all = filtered(S.bookings);
-  const groups = {
-    all: all,
-    inhouse: all.filter(b => b.checkIn <= D(0) && b.checkOut > D(0)),
-    upcoming: all.filter(b => b.checkIn > D(0)),
-    past: all.filter(b => b.checkOut <= D(0)),
-  };
-  const list = groups[resaFilter].slice().sort((a, b) => a.checkIn.localeCompare(b.checkIn));
-  const tab = (k, l) => `<button class="chip ${resaFilter===k?'ai':''}" data-rf="${k}">${l} (${groups[k].length})</button>`;
-
-  const card = b => {
-    const p = prop(b.pid);
-    const status = b.checkOut <= D(0) ? ['muted','Terminé']
-      : b.checkIn <= D(0) ? ['ok','Sur place'] : ['info','À venir'];
-    return `<div class="card" data-open="${b.id}" style="cursor:pointer">
-      <div class="row" style="border:0;padding:0">
-        <div class="avatar" style="background:${b.avatarColor}">${b.guest[0]}</div>
-        <div class="grow"><div class="title">${b.guest}</div>
-          <div class="small muted ellipsis">${p.emoji} ${p.name}</div></div>
-        <div style="text-align:right">
-          <span class="badge plat ${PLAT[b.plat].cls}">${PLAT[b.plat].label}</span>
-          <div class="small" style="font-weight:800;margin-top:5px">${money(b.amount)}</div>
-        </div>
-      </div>
-      <div class="row" style="border:0;padding:8px 0 0;color:var(--txt2)">
-        <span class="small">📅 ${fmtDate(b.checkIn)} → ${fmtDate(b.checkOut)} · ${b.nights} nuits</span>
-        <span class="spacer" style="flex:1"></span>
-        <span class="badge ${status[0]}">${status[1]}</span>
-      </div>
-    </div>`;
-  };
-
-  return `
-  <div class="topbar"><h1>Réservations</h1><span class="spacer"></span>
-    <button class="btn sm" data-add>+ Résa</button></div>
-  ${propSwitch()}
-  <div class="chips">${tab('all','Toutes')}${tab('inhouse','Sur place')}${tab('upcoming','À venir')}${tab('past','Passées')}</div>
-  ${list.length ? list.map(card).join('') :
-    '<div class="empty"><div class="ico">📖</div>Aucune réservation</div>'}`;
-}
-
-// ================= MESSAGES =================
-function vMessages() {
-  const convs = Object.entries(S.conversations)
-    .map(([id, c]) => ({ id, c, b: booking(id) }))
-    .filter(x => x.b && (S.activePid === 'all' || x.b.pid === S.activePid))
-    .sort((a, b) => lastAt(b.c).localeCompare(lastAt(a.c)));
-
-  const row = ({ id, c, b }) => {
-    const p = prop(b.pid);
-    const last = c.msgs[c.msgs.length - 1];
-    const guestLast = [...c.msgs].reverse().find(m => m.from === 'guest');
-    const sent = guestLast ? sentiment(guestLast.text) : null;
-    const sentIco = sent === 'neg' ? '⚠️' : sent === 'pos' ? '😊' : sent === 'neu' ? '💬' : '';
-    return `<div class="row" data-msg="${id}">
-      <div class="avatar" style="background:${b.avatarColor}">${b.guest[0]}</div>
-      <div class="grow">
-        <div class="title ellipsis">${b.guest} ${sentIco}</div>
-        <div class="small muted ellipsis">${last.from==='host'?'Vous : ':''}${last.text}</div>
-        <div class="tiny dim">${p.emoji} ${p.name}</div>
-      </div>
-      <div style="text-align:right">
-        ${c.unread ? '<span class="badge-dot" style="position:static;display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--bad)"></span>' : ''}
-        <div class="tiny dim">${last.at.slice(11)}</div>
-      </div>
-    </div>`;
-  };
-
-  return `
-  <div class="topbar"><h1>Messagerie</h1></div>
-  ${propSwitch()}
-  <div class="card small muted" style="display:flex;gap:8px;align-items:center">
-    <span>🤖</span><span>Boîte unifiée tous canaux · réponses IA suggérées · détection d'insatisfaction.</span>
-  </div>
-  <div class="card" style="padding:4px 14px">
-    ${convs.length ? convs.map(row).join('') :
-      '<div class="empty small">Aucune conversation</div>'}
-  </div>`;
-}
-const lastAt = c => c.msgs[c.msgs.length - 1].at;
 
 // Analyse de sentiment simplifiée (mock — remplacer par appel Claude API)
 function sentiment(txt) {
@@ -380,10 +329,12 @@ function vPlus() {
     ['checkio', '🔑', 'Check-in / Check-out', 'Codes, piscine, jacuzzi, arrosage'],
     ['automsg', '🔔', 'Messages automatiques', `${S.autoMessages.filter(m=>m.enabled).length}/${S.autoMessages.length} actifs`],
     ['livret', '📗', "Livret d'accueil", 'Guide voyageur digital'],
-    ['pricing', '💶', 'Tarification dynamique', 'Recommandations IA'],
     ['guests', '👥', 'Voyageurs', `${S.bookings.length} séjours`],
-    ['stats', '📈', 'Statistiques', 'Revenus & occupation'],
-    ['settings', '⚙️', 'Réglages', 'Logements, démo'],
+    ...(isAdmin() ? [
+      ['pricing', '💶', 'Tarification dynamique', 'Recommandations IA'],
+      ['stats', '📈', 'Statistiques', 'Revenus & occupation'],
+      ['settings', '⚙️', 'Réglages', 'Logements, démo'],
+    ] : []),
   ];
   return `
   <div class="topbar"><h1>Plus</h1></div>
@@ -393,6 +344,7 @@ function vPlus() {
       <div class="grow"><div class="title">${l}</div><div class="small muted">${s}</div></div>
       <span class="dim">›</span></div>`).join('')}
   </div>
+  ${isNative() ? `<button class="btn ghost block" data-lock>🔒 Changer de compte</button>` : ''}
   <div class="card small muted">GestHôte v${window.APP_VERSION} — démo. Données locales à cet appareil.</div>`;
 }
 
@@ -656,6 +608,7 @@ function sheetCheckInOut() {
 
 // Tarification dynamique (amélioration IA)
 function sheetPricing() {
+  if (!isAdmin()) { toast('⛔ Réservé à l\'administrateur'); return; }
   const props = S.activePid === 'all' ? S.properties : [prop(S.activePid)];
   const reco = (p, off) => {
     const dt = d(off), wk = [5,6].includes(dt.getDay());
@@ -709,6 +662,7 @@ function sheetGuests() {
 // Statistiques
 let statsFilter = { mode: 'all', month: D(0).slice(0,7), year: D(0).slice(0,4) };
 function sheetStats() {
+  if (!isAdmin()) { toast('⛔ Réservé à l\'administrateur'); return; }
   const bks = S.bookings.filter(b => {
     if (statsFilter.mode === 'month') return b.checkIn.slice(0,7) === statsFilter.month;
     if (statsFilter.mode === 'year') return b.checkIn.slice(0,4) === statsFilter.year;
@@ -747,6 +701,7 @@ function sheetStats() {
 
 // Réglages
 function sheetSettings() {
+  if (!isAdmin()) { toast('⛔ Réservé à l\'administrateur'); return; }
   openSheet(`
     <h2>⚙️ Réglages</h2>
     <div class="sec-title">Logements</div>
@@ -756,6 +711,14 @@ function sheetSettings() {
       <span class="dim">›</span>
     </div>`).join('') : '<div class="empty small">Aucun logement — ajoutez le premier ci-dessous</div>'}</div>
     <button class="btn ghost block" data-add-prop>+ Ajouter un logement</button>
+    ${isNative() ? `<div class="sec-title">Comptes (empreinte digitale)</div>
+    <div class="card">
+      <label class="small muted">Nom du compte Admin</label>
+      <input data-account-name="admin" value="${S.accounts.admin.name}" style="${FIELD}">
+      <label class="small muted">Nom du compte Utilisateur</label>
+      <input data-account-name="user" value="${S.accounts.user.name}" style="width:100%;margin:6px 0 0;padding:11px;border-radius:10px;background:var(--card2);color:var(--txt);border:1px solid var(--line)">
+      <div class="tiny muted" style="margin-top:8px">L'Admin a accès à tout. L'Utilisateur voit Tableau, Planning, Ménage, Check-in/Check-out, Livret et Voyageurs, mais pas Tarification, Statistiques ni Réglages.</div>
+    </div>` : ''}
     <div class="sec-title">Données</div>
     <div class="card">
       <button class="btn ghost block" data-reset>♻️ Réinitialiser l'application</button>
@@ -819,17 +782,6 @@ function sheetPropertyForm(id) {
       <input id="f-code" value="${p ? p.code : ''}" style="width:100%;margin:6px 0 0;padding:11px;border-radius:10px;background:var(--card2);color:var(--txt);border:1px solid var(--line)">
     </div>
 
-    <div class="sec-title">Synchronisation Booking.com</div>
-    <div class="card">
-      <label class="small muted">URL iCal</label>
-      <input id="f-ical" placeholder="https://admin.booking.com/.../calendar.ics" value="${p ? (p.icalUrl || '') : ''}" style="${FIELD}">
-      <div class="tiny muted" style="margin-top:-8px">Extranet Booking.com → Réglages → Calendrier → Synchroniser les calendriers → copier le lien d'export iCal. Synchro en lecture seule : bloque les dates, ne remonte pas le nom du voyageur.</div>
-      ${p && p.icalUrl ? `<div class="small muted" style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:12px">
-        <span>Dernière synchro : ${p.icalLastSync ? fmtDateJ(iso(p.icalLastSync)) + ' ' + new Date(p.icalLastSync).toTimeString().slice(0,5) : 'jamais'}</span>
-        <button class="btn ghost sm" data-sync-ical="${id}">🔄 Synchroniser</button>
-      </div>` : ''}
-    </div>
-
     <div class="btn-row even" style="margin-top:4px">
       <button class="btn ghost" data-cancel-prop>Annuler</button>
       <button class="btn" data-save-prop="${id || ''}">${p ? 'Enregistrer' : 'Créer le logement'}</button>
@@ -851,7 +803,6 @@ function saveProperty(sg, id) {
     wifi: sg.querySelector('#f-wifi').value.trim(),
     wifiPass: sg.querySelector('#f-wifiPass').value.trim(),
     code: sg.querySelector('#f-code').value.trim(),
-    icalUrl: sg.querySelector('#f-ical').value.trim(),
   };
   if (id) {
     Object.assign(prop(id), data);
@@ -869,63 +820,6 @@ function deleteProperty(id) {
   S.cleaning = S.cleaning.filter(c => c.pid !== id);
   if (S.activePid === id) S.activePid = 'all';
   save(); closeSheet(); toast('Logement supprimé'); render(); sheetSettings();
-}
-
-// ---------- Synchronisation iCal Booking.com (lecture seule) ----------
-function parseIcal(text) {
-  const unfolded = text.replace(/\r\n[ \t]/g, '').replace(/\n[ \t]/g, '');
-  return unfolded.split('BEGIN:VEVENT').slice(1).map(block => {
-    const body = block.split('END:VEVENT')[0];
-    const grab = re => { const m = body.match(re); return m ? m[1].replace(/\r$/, '').trim() : null; };
-    const startRaw = grab(/DTSTART[^:\n]*:(\d{8})/);
-    const endRaw = grab(/DTEND[^:\n]*:(\d{8})/);
-    const toIso = raw => `${raw.slice(0,4)}-${raw.slice(4,6)}-${raw.slice(6,8)}`;
-    return {
-      start: startRaw ? toIso(startRaw) : null,
-      end: endRaw ? toIso(endRaw) : null,
-      uid: grab(/UID:(.+)/),
-      summary: grab(/SUMMARY:(.+)/),
-    };
-  }).filter(ev => ev.start && ev.end);
-}
-
-async function importIcal(propId) {
-  const p = prop(propId);
-  if (!p || !p.icalUrl) { toast('Aucune URL iCal configurée'); return; }
-  toast('🔄 Synchronisation Booking.com…');
-  let text;
-  try {
-    const res = await fetch(p.icalUrl, { cache: 'no-store' });
-    if (!res.ok) throw new Error('HTTP ' + res.status);
-    text = await res.text();
-  } catch (e) {
-    toast("⛔ Échec de la synchro — sur la version web, Booking.com bloque souvent l'accès direct (CORS) ; utilisez l'app Android.");
-    return;
-  }
-  const events = parseIcal(text);
-  let added = 0, updated = 0;
-  events.forEach(ev => {
-    const existing = S.bookings.find(b => b.pid === propId && b.icalUid === ev.uid);
-    if (existing) {
-      existing.checkIn = ev.start; existing.checkOut = ev.end;
-      existing.nights = nightsBetween(ev.start, ev.end);
-      updated++;
-    } else {
-      const id = 'bic' + Math.random().toString(36).slice(2, 9);
-      S.bookings.push({
-        id, pid: propId, plat: 'booking', guest: ev.summary || 'Réservation Booking.com',
-        checkIn: ev.start, checkOut: ev.end, nights: nightsBetween(ev.start, ev.end),
-        guests: p.cap, amount: 0, avatarColor: '#3b82f6', review: null, note: '',
-        icalUid: ev.uid, imported: true,
-      });
-      S.conversations[id] = { unread: 0, msgs: [] };
-      added++;
-    }
-  });
-  p.icalLastSync = new Date().toISOString();
-  save();
-  toast(`✅ Booking.com : ${added} ajoutée(s), ${updated} mise(s) à jour`);
-  closeSheet(); sheetPropertyForm(propId);
 }
 
 // Ajouter une réservation
@@ -995,10 +889,14 @@ function bindCommon(root) {
   root.querySelectorAll('[data-msg]').forEach(el => el.onclick = e => { e.stopPropagation(); closeSheet(); sheetThread(el.dataset.msg); });
   root.querySelectorAll('[data-goto]').forEach(el => el.onclick = () => { TAB = el.dataset.goto; render(); });
   root.querySelectorAll('[data-add]').forEach(el => el.onclick = sheetAdd);
+  root.querySelectorAll('[data-lock]').forEach(el => el.onclick = lockApp);
+  root.querySelectorAll('[data-account-name]').forEach(el => el.onblur = () => {
+    S.accounts[el.dataset.accountName].name = el.value.trim() || (el.dataset.accountName === 'admin' ? 'Admin' : 'Utilisateur');
+    save();
+  });
   root.querySelectorAll('[data-plan]').forEach(el => el.onclick = () => {
     const v = +el.dataset.plan; planStart = v === 0 ? 0 : planStart + v; render();
   });
-  root.querySelectorAll('[data-rf]').forEach(el => el.onclick = () => { resaFilter = el.dataset.rf; render(); });
   root.querySelectorAll('[data-more]').forEach(el => el.onclick = () => {
     ({ cleaning: sheetCleaning, checkio: sheetCheckInOut, automsg: sheetAutoMessages, livret: sheetLivret, pricing: sheetPricing,
        guests: sheetGuests, stats: sheetStats, settings: sheetSettings }[el.dataset.more])();
@@ -1098,7 +996,6 @@ function bindCommon(root) {
   root.querySelectorAll('[data-cancel-prop]').forEach(el => el.onclick = () => { closeSheet(); sheetSettings(); });
   root.querySelectorAll('[data-save-prop]').forEach(el => el.onclick = () => saveProperty(document.querySelector('.sheet-bg'), el.dataset.saveProp || null));
   root.querySelectorAll('[data-delete-prop]').forEach(el => el.onclick = () => deleteProperty(el.dataset.deleteProp));
-  root.querySelectorAll('[data-sync-ical]').forEach(el => el.onclick = () => importIcal(el.dataset.syncIcal));
 }
 // Re-câbler dans les sheets injectées
 const _openSheet = openSheet;
@@ -1115,4 +1012,4 @@ function escapeHtml(s) { return s.replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt
 
 // ---------- Boot ----------
 load();
-render();
+if (isNative() && !currentRole) renderLock(); else render();

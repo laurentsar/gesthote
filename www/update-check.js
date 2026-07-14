@@ -1,14 +1,16 @@
 /*
  * update-check.js — vérification de mise à jour applicative (générique).
  * Interroge la dernière Release GitHub, compare au numéro embarqué et affiche
- * une bannière de téléchargement si une version plus récente est publiée.
+ * une carte de mise à jour (façon Play Store) avec les nouveautés si une
+ * version plus récente est publiée.
  *
  * Config (dans index.html, avant ce script) :
  *   window.UPDATE_REPO = 'laurentsar/<repo>';   // obligatoire
  *   window.APP_VERSION = '1.2';                  // obligatoire (version installée)
  *
- * Autonome : aucune dépendance, styles injectés. Anti-spam : 1 requête / 6 h,
- * mémorise la version ignorée. Échec réseau silencieux.
+ * Autonome : aucune dépendance JS, réutilise les variables CSS de style.css
+ * pour rester visuellement cohérent avec le reste de l'app. Anti-spam :
+ * 1 requête / 6 h, mémorise la version ignorée. Échec réseau silencieux.
  */
 (function () {
   'use strict';
@@ -36,6 +38,15 @@
     return 0;
   }
 
+  // Nettoie le corps markdown d'une release GitHub en quelques puces lisibles.
+  function extractNotes(body) {
+    if (!body) return [];
+    return body.split('\n')
+      .map(function (l) { return l.replace(/^[-*]\s+/, '').replace(/https?:\/\/\S+/g, '').trim(); })
+      .filter(function (l) { return l && !/^#/.test(l) && !/^\*\*full changelog/i.test(l); })
+      .slice(0, 4);
+  }
+
   var last = parseInt(ls(true, KEY_POLL), 10) || 0;
   if (Date.now() - last < POLL_INTERVAL) return;
 
@@ -54,39 +65,49 @@
       var apk = (rel.assets || []).filter(function (a) {
         return /\.apk$/i.test(a.name);
       })[0];
-      showBanner(latest, apk ? apk.browser_download_url : rel.html_url);
+      showCard(latest, apk ? apk.browser_download_url : rel.html_url, extractNotes(rel.body));
     })
     .catch(function () { /* hors-ligne : silencieux */ });
 
-  function showBanner(version, url) {
-    if (document.getElementById('update-banner')) return;
+  function showCard(version, url, notes) {
+    if (document.getElementById('update-card')) return;
     var css = document.createElement('style');
     css.textContent =
-      '#update-banner{position:fixed;left:12px;right:12px;bottom:12px;z-index:99999;' +
-      'display:flex;align-items:center;gap:10px;padding:12px 14px;border-radius:14px;' +
-      'background:#1f2937;color:#f9fafb;box-shadow:0 6px 24px rgba(0,0,0,.35);' +
-      'font:500 14px/1.3 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;' +
-      'max-width:520px;margin:0 auto}' +
-      '#update-banner .ub-txt{flex:1;min-width:0}' +
-      '#update-banner b{color:#fff}' +
-      '#update-banner a{flex:none;background:#22c55e;color:#06210f;text-decoration:none;' +
-      'font-weight:700;padding:8px 14px;border-radius:10px}' +
-      '#update-banner button{flex:none;background:transparent;border:0;color:#9ca3af;' +
-      'font-size:18px;line-height:1;cursor:pointer;padding:4px}';
+      '#update-card{position:fixed;left:12px;right:12px;bottom:calc(12px + env(safe-area-inset-bottom, 0px));' +
+      'z-index:99999;padding:16px;border-radius:var(--r, 16px);background:var(--card, #13203a);' +
+      'color:var(--txt, #eaf1ff);border:1px solid var(--line, #24365c);' +
+      'box-shadow:0 8px 28px rgba(0,0,0,.4);font:14px/1.4 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;' +
+      'max-width:480px;margin:0 auto}' +
+      '#update-card .uc-head{display:flex;align-items:center;gap:10px;margin-bottom:2px}' +
+      '#update-card .uc-title{font-weight:700;font-size:15px;flex:1}' +
+      '#update-card .uc-close{background:transparent;border:0;color:var(--txt2, #9fb2d4);' +
+      'font-size:18px;line-height:1;cursor:pointer;padding:2px 4px}' +
+      '#update-card .uc-ver{color:var(--txt2, #9fb2d4);font-size:12px;margin:2px 0 10px}' +
+      '#update-card ul{margin:0 0 14px;padding-left:18px;color:var(--txt2, #9fb2d4);font-size:13px}' +
+      '#update-card li{margin-bottom:3px}' +
+      '#update-card .uc-actions{display:flex;gap:8px}' +
+      '#update-card .uc-actions button, #update-card .uc-actions a{flex:1;text-align:center;' +
+      'text-decoration:none;font-weight:700;font-size:13px;padding:10px;border-radius:10px;border:0}' +
+      '#update-card .uc-later{background:var(--card2, #182a4a);color:var(--txt, #eaf1ff);' +
+      'border:1px solid var(--line, #24365c) !important}' +
+      '#update-card .uc-update{background:var(--accent, #14b8a6);color:#062622}';
     document.head.appendChild(css);
 
     var b = document.createElement('div');
-    b.id = 'update-banner';
-    var txt = document.createElement('span');
-    txt.className = 'ub-txt';
-    txt.innerHTML = '🔄 Nouvelle version <b>v' + version + '</b> disponible';
-    var dl = document.createElement('a');
-    dl.href = url; dl.target = '_blank'; dl.rel = 'noopener';
-    dl.textContent = 'Télécharger';
-    var x = document.createElement('button');
-    x.setAttribute('aria-label', 'Ignorer'); x.textContent = '✕';
-    x.onclick = function () { ls(false, KEY_DISMISS, version); b.remove(); };
-    b.appendChild(txt); b.appendChild(dl); b.appendChild(x);
-    (document.body || document.documentElement).appendChild(b);
+    b.id = 'update-card';
+    b.innerHTML =
+      '<div class="uc-head"><span style="font-size:20px">🔄</span>' +
+      '<span class="uc-title">Mise à jour disponible</span>' +
+      '<button class="uc-close" aria-label="Ignorer">✕</button></div>' +
+      '<div class="uc-ver">Version v' + version + '</div>' +
+      (notes.length ? '<ul>' + notes.map(function (n) { return '<li>' + n.replace(/</g, '&lt;') + '</li>'; }).join('') + '</ul>' : '') +
+      '<div class="uc-actions">' +
+      '<button class="uc-later">Plus tard</button>' +
+      '<a class="uc-update" href="' + url + '" target="_blank" rel="noopener">Mettre à jour</a>' +
+      '</div>';
+    document.body.appendChild(b);
+    var dismiss = function () { ls(false, KEY_DISMISS, version); b.remove(); };
+    b.querySelector('.uc-close').onclick = dismiss;
+    b.querySelector('.uc-later').onclick = dismiss;
   }
 })();

@@ -101,7 +101,7 @@ jobs:
           name: "GestHôte v${{ steps.version.outputs.version }}"
           files: gesthote-${{ steps.version.outputs.version }}.apk
           fail_on_unmatched_files: true
-          generate_release_notes: false
+          generate_release_notes: true
 
       - name: Persist stable keystore
         if: env.NEW_KS == '1'
