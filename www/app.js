@@ -544,14 +544,15 @@ function sheetCleaning() {
     const b = booking(c.bookingId), p = prop(c.pid);
     const st = { done:['ok','Fait'], todo:['warn','À faire'], planned:['info','Planifié'] }[c.status];
     const nextIn = S.bookings.find(x => x.pid === c.pid && x.checkIn === c.date);
-    return `<div class="row">
+    return `<div class="row" style="align-items:flex-start;flex-wrap:wrap">
       <div class="avatar" style="background:${p.color}">${p.emoji}</div>
       <div class="grow"><div class="title small">${p.name}</div>
         <div class="tiny muted">${fmtDateJ(c.date)}${nextIn?` · arrivée ${nextIn.guest.split(' ')[0]} même jour`:''}</div>
         <select data-clean-assign="${c.id}" style="margin-top:6px;padding:6px 8px;border-radius:8px;background:var(--card2);color:var(--txt);border:1px solid var(--line);font-size:12px">
           <option value="">— Qui fait le ménage ? —</option>
           ${S.cleaners.map(name => `<option value="${name}" ${c.cleaner===name?'selected':''}>${name}</option>`).join('')}
-        </select></div>
+        </select>
+        <textarea data-clean-comment="${c.id}" placeholder="Commentaire (ex. clé cachée, linge à racheter, panne signalée…)" rows="2" style="margin-top:6px;width:100%;padding:8px;border-radius:8px;background:var(--card2);color:var(--txt);border:1px solid var(--line);font:inherit;font-size:12px;resize:vertical">${c.comment || ''}</textarea></div>
       <button class="badge ${st[0]}" data-clean="${c.id}">${st[1]}</button>
     </div>`;
   };
@@ -928,7 +929,7 @@ function saveAdd(sg) {
   const newBooking = { id, pid, plat, guest: g, checkIn: inIso, checkOut: outIso, nights, guests,
     amount: p.base * nights, avatarColor: '#14b8a6', review: null, note: '' };
   S.bookings.push(newBooking);
-  S.cleaning.push({ id: 'c' + id, pid, date: outIso, bookingId: id, cleaner: '',
+  S.cleaning.push({ id: 'c' + id, pid, date: outIso, bookingId: id, cleaner: '', comment: '',
     status: outIso < D(0) ? 'done' : outIso === D(0) ? 'todo' : 'planned' });
   const confirmText = renderAutoTemplate('reservation', newBooking);
   S.conversations[id] = { unread: 0, msgs: confirmText ? [
@@ -987,6 +988,10 @@ function bindCommon(root) {
   root.querySelectorAll('[data-clean-assign]').forEach(el => el.onchange = () => {
     const c = S.cleaning.find(x => x.id === el.dataset.cleanAssign);
     c.cleaner = el.value; save();
+  });
+  root.querySelectorAll('[data-clean-comment]').forEach(el => el.onblur = () => {
+    const c = S.cleaning.find(x => x.id === el.dataset.cleanComment);
+    c.comment = el.value; save();
   });
   root.querySelectorAll('[data-manage-cleaners]').forEach(el => el.onclick = () => { closeSheet(); sheetCleaners(); });
   root.querySelectorAll('[data-toggle-auto]').forEach(el => el.onchange = () => {
