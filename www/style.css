@@ -128,9 +128,11 @@ a { color: inherit; }
 }
 .btn:active { transform: scale(.98); }
 .btn.ghost { background: var(--card2); color: var(--txt); border: 1px solid var(--line); }
+.btn.danger { background: var(--card2); color: var(--bad); border: 1px solid var(--bad); }
 .btn.sm { padding: 7px 11px; font-size: 12px; border-radius: 10px; }
 .btn.block { width: 100%; }
 .btn-row { display: flex; gap: 8px; }
+.btn-row.even .btn { flex: 1; }
 
 /* Planning timeline */
 .planning-scroll { overflow-x: auto; margin: 0 -14px; padding: 0 14px 6px; }

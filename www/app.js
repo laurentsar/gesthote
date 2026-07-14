@@ -731,39 +731,63 @@ function sheetPropertyForm(id) {
   const p = id ? prop(id) : null;
   openSheet(`
     <h2>${p ? '✏️ Modifier le logement' : '+ Nouveau logement'}</h2>
+
+    <div class="sec-title">Identité</div>
     <div class="card">
       <label class="small muted">Nom</label>
-      <input id="f-name" placeholder="Ex. Studio Vieux-Port" value="${p ? p.name : ''}" style="${FIELD}">
-      <label class="small muted">Emoji</label>
-      <input id="f-emoji" placeholder="🏠" value="${p ? p.emoji : '🏠'}" style="${FIELD}">
-      <label class="small muted">Couleur</label>
-      <input id="f-color" type="color" value="${p ? p.color : '#14b8a6'}" style="width:100%;margin:6px 0 12px;height:42px;border-radius:10px;border:1px solid var(--line);background:var(--card2)">
+      <input id="f-name" placeholder="Ex. Studio Vieux-Port" value="${p ? p.name : ''}" style="${FIELD}" autofocus>
+      <div style="display:flex;gap:10px">
+        <div style="flex:1"><label class="small muted">Emoji</label>
+          <input id="f-emoji" placeholder="🏠" value="${p ? p.emoji : '🏠'}" style="margin-top:6px;padding:10px;border-radius:10px;background:var(--card2);color:var(--txt);border:1px solid var(--line);width:100%"></div>
+        <div style="flex:1"><label class="small muted">Couleur</label>
+          <input id="f-color" type="color" value="${p ? p.color : '#14b8a6'}" style="width:100%;margin-top:6px;height:42px;border-radius:10px;border:1px solid var(--line);background:var(--card2)"></div>
+      </div>
+    </div>
+
+    <div class="sec-title">Adresse</div>
+    <div class="card">
       <label class="small muted">Ville</label>
       <input id="f-city" value="${p ? p.city : ''}" style="${FIELD}">
       <label class="small muted">Adresse</label>
-      <input id="f-address" value="${p ? p.address : ''}" style="${FIELD}">
+      <input id="f-address" value="${p ? p.address : ''}" style="width:100%;margin:6px 0 0;padding:11px;border-radius:10px;background:var(--card2);color:var(--txt);border:1px solid var(--line)">
+    </div>
+
+    <div class="sec-title">Capacité &amp; tarif</div>
+    <div class="card">
       <div style="display:flex;gap:10px">
-        <div style="flex:1"><label class="small muted">Capacité</label>
-          <input id="f-cap" type="number" min="1" value="${p ? p.cap : 2}" style="margin-top:6px;padding:10px;border-radius:10px;background:var(--card2);color:var(--txt);border:1px solid var(--line);width:100%"></div>
+        <div style="flex:1"><label class="small muted">Capacité (voyageurs)</label>
+          <input id="f-cap" type="number" inputmode="numeric" min="1" value="${p ? p.cap : 2}" style="margin-top:6px;padding:10px;border-radius:10px;background:var(--card2);color:var(--txt);border:1px solid var(--line);width:100%"></div>
         <div style="flex:1"><label class="small muted">Prix de base / nuit</label>
-          <input id="f-base" type="number" min="0" value="${p ? p.base : 80}" style="margin-top:6px;padding:10px;border-radius:10px;background:var(--card2);color:var(--txt);border:1px solid var(--line);width:100%"></div>
+          <input id="f-base" type="number" inputmode="numeric" min="0" value="${p ? p.base : 80}" style="margin-top:6px;padding:10px;border-radius:10px;background:var(--card2);color:var(--txt);border:1px solid var(--line);width:100%"></div>
       </div>
-      <label class="small muted" style="display:block;margin-top:12px">Wifi (nom du réseau)</label>
+    </div>
+
+    <div class="sec-title">Accès voyageur</div>
+    <div class="card">
+      <label class="small muted">Wifi (nom du réseau)</label>
       <input id="f-wifi" value="${p ? p.wifi : ''}" style="${FIELD}">
       <label class="small muted">Mot de passe wifi</label>
       <input id="f-wifiPass" value="${p ? p.wifiPass : ''}" style="${FIELD}">
       <label class="small muted">Code porte</label>
-      <input id="f-code" value="${p ? p.code : ''}" style="${FIELD}">
-      <label class="small muted" style="display:block;margin-top:4px">URL iCal Booking.com</label>
+      <input id="f-code" value="${p ? p.code : ''}" style="width:100%;margin:6px 0 0;padding:11px;border-radius:10px;background:var(--card2);color:var(--txt);border:1px solid var(--line)">
+    </div>
+
+    <div class="sec-title">Synchronisation Booking.com</div>
+    <div class="card">
+      <label class="small muted">URL iCal</label>
       <input id="f-ical" placeholder="https://admin.booking.com/.../calendar.ics" value="${p ? (p.icalUrl || '') : ''}" style="${FIELD}">
       <div class="tiny muted" style="margin-top:-8px">Extranet Booking.com → Réglages → Calendrier → Synchroniser les calendriers → copier le lien d'export iCal. Synchro en lecture seule : bloque les dates, ne remonte pas le nom du voyageur.</div>
+      ${p && p.icalUrl ? `<div class="small muted" style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:12px">
+        <span>Dernière synchro : ${p.icalLastSync ? fmtDateJ(iso(p.icalLastSync)) + ' ' + new Date(p.icalLastSync).toTimeString().slice(0,5) : 'jamais'}</span>
+        <button class="btn ghost sm" data-sync-ical="${id}">🔄 Synchroniser</button>
+      </div>` : ''}
     </div>
-    ${p && p.icalUrl ? `<div class="card small muted" style="display:flex;justify-content:space-between;align-items:center;gap:10px">
-      <span>Dernière synchro Booking.com : ${p.icalLastSync ? fmtDateJ(iso(p.icalLastSync)) + ' ' + new Date(p.icalLastSync).toTimeString().slice(0,5) : 'jamais'}</span>
-      <button class="btn ghost sm" data-sync-ical="${id}">🔄 Synchroniser</button>
-    </div>` : ''}
-    <button class="btn block" data-save-prop="${id || ''}">${p ? 'Enregistrer' : 'Créer le logement'}</button>
-    ${p ? `<button class="btn ghost block" style="margin-top:8px" data-delete-prop="${id}">🗑️ Supprimer ce logement</button>` : ''}
+
+    <div class="btn-row even" style="margin-top:4px">
+      <button class="btn ghost" data-cancel-prop>Annuler</button>
+      <button class="btn" data-save-prop="${id || ''}">${p ? 'Enregistrer' : 'Créer le logement'}</button>
+    </div>
+    ${p ? `<button class="btn danger block" style="margin-top:10px" data-delete-prop="${id}">🗑️ Supprimer ce logement</button>` : ''}
   `);
 }
 function saveProperty(sg, id) {
@@ -998,6 +1022,7 @@ function bindCommon(root) {
   root.querySelectorAll('[data-save-add]').forEach(el => el.onclick = () => saveAdd(document.querySelector('.sheet-bg')));
   root.querySelectorAll('[data-add-prop]').forEach(el => el.onclick = () => { closeSheet(); sheetPropertyForm(); });
   root.querySelectorAll('[data-edit-prop]').forEach(el => el.onclick = () => { closeSheet(); sheetPropertyForm(el.dataset.editProp); });
+  root.querySelectorAll('[data-cancel-prop]').forEach(el => el.onclick = () => { closeSheet(); sheetSettings(); });
   root.querySelectorAll('[data-save-prop]').forEach(el => el.onclick = () => saveProperty(document.querySelector('.sheet-bg'), el.dataset.saveProp || null));
   root.querySelectorAll('[data-delete-prop]').forEach(el => el.onclick = () => deleteProperty(el.dataset.deleteProp));
   root.querySelectorAll('[data-sync-ical]').forEach(el => el.onclick = () => importIcal(el.dataset.syncIcal));
