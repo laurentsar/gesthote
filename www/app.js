@@ -47,6 +47,7 @@ function seed() {
     cleaners: [],
     autoMessages: DEFAULT_AUTO_MESSAGES(),
     activePid: 'all',
+    accounts: { admin: { name: 'Admin' }, user: { name: 'Utilisateur' } },
     v: 2,
   };
 }
@@ -57,10 +58,56 @@ let S;
 function load() {
   try { S = JSON.parse(localStorage.getItem(KEY)); } catch (e) { S = null; }
   if (!S || S.v !== 2) { S = seed(); save(); }
+  if (!S.accounts) { S.accounts = seed().accounts; save(); }
 }
 function save() { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} }
 const prop = id => S.properties.find(p => p.id === id);
 const booking = id => S.bookings.find(b => b.id === id);
+
+// ---------- Authentification (empreinte digitale, APK Android uniquement) ----------
+// Sur web/PWA (pas de runtime Capacitor natif), l'app reste ouverte sans
+// restriction, comme avant. Sur l'APK, un verrou par empreinte s'affiche au
+// lancement et distingue deux rôles : admin (tout) et user (opérationnel).
+const isNative = () => !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
+let currentRole = isNative() ? null : 'admin';
+const isAdmin = () => currentRole === 'admin';
+
+function renderLock() {
+  app.innerHTML = `
+    <div class="screen" style="display:flex;flex-direction:column;justify-content:center;align-items:center;gap:22px;min-height:calc(100vh - var(--nav-h) - var(--safe-b) - var(--safe-t) - 32px);padding:24px;text-align:center">
+      <img src="img/logo-chalets-du-pialou.jpg" alt="" style="width:88px;height:88px;border-radius:20px;object-fit:cover">
+      <div><h1 style="margin:0 0 4px">GestHôte</h1><div class="small muted">Authentifiez-vous pour continuer</div></div>
+      <div style="display:flex;flex-direction:column;gap:12px;width:100%;max-width:320px">
+        <button class="btn block" data-login="admin">👤 ${S.accounts.admin.name}</button>
+        <button class="btn ghost block" data-login="user">👤 ${S.accounts.user.name}</button>
+      </div>
+      <div id="lock-msg" class="small muted"></div>
+    </div>`;
+  app.querySelectorAll('[data-login]').forEach(el => el.onclick = () => attemptLogin(el.dataset.login));
+}
+
+async function attemptLogin(role) {
+  const msg = document.getElementById('lock-msg');
+  const Bio = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.BiometricAuthNative;
+  if (!Bio) { currentRole = role; render(); return; }
+  try {
+    const check = await Bio.checkBiometry();
+    if (!check || !check.isAvailable) { currentRole = role; render(); return; }
+    await Bio.authenticate({
+      reason: 'Authentification pour ouvrir GestHôte',
+      cancelTitle: 'Annuler',
+      allowDeviceCredential: true,
+      androidTitle: 'GestHôte',
+      androidSubtitle: S.accounts[role].name,
+    });
+    currentRole = role;
+    render();
+  } catch (e) {
+    if (msg) msg.textContent = '⛔ Authentification annulée ou échouée — réessayez.';
+  }
+}
+
+function lockApp() { currentRole = null; renderLock(); }
 
 // ---------- Routeur ----------
 let TAB = 'home';
@@ -282,10 +329,12 @@ function vPlus() {
     ['checkio', '🔑', 'Check-in / Check-out', 'Codes, piscine, jacuzzi, arrosage'],
     ['automsg', '🔔', 'Messages automatiques', `${S.autoMessages.filter(m=>m.enabled).length}/${S.autoMessages.length} actifs`],
     ['livret', '📗', "Livret d'accueil", 'Guide voyageur digital'],
-    ['pricing', '💶', 'Tarification dynamique', 'Recommandations IA'],
     ['guests', '👥', 'Voyageurs', `${S.bookings.length} séjours`],
-    ['stats', '📈', 'Statistiques', 'Revenus & occupation'],
-    ['settings', '⚙️', 'Réglages', 'Logements, démo'],
+    ...(isAdmin() ? [
+      ['pricing', '💶', 'Tarification dynamique', 'Recommandations IA'],
+      ['stats', '📈', 'Statistiques', 'Revenus & occupation'],
+      ['settings', '⚙️', 'Réglages', 'Logements, démo'],
+    ] : []),
   ];
   return `
   <div class="topbar"><h1>Plus</h1></div>
@@ -295,6 +344,7 @@ function vPlus() {
       <div class="grow"><div class="title">${l}</div><div class="small muted">${s}</div></div>
       <span class="dim">›</span></div>`).join('')}
   </div>
+  ${isNative() ? `<button class="btn ghost block" data-lock>🔒 Changer de compte</button>` : ''}
   <div class="card small muted">GestHôte v${window.APP_VERSION} — démo. Données locales à cet appareil.</div>`;
 }
 
@@ -558,6 +608,7 @@ function sheetCheckInOut() {
 
 // Tarification dynamique (amélioration IA)
 function sheetPricing() {
+  if (!isAdmin()) { toast('⛔ Réservé à l\'administrateur'); return; }
   const props = S.activePid === 'all' ? S.properties : [prop(S.activePid)];
   const reco = (p, off) => {
     const dt = d(off), wk = [5,6].includes(dt.getDay());
@@ -611,6 +662,7 @@ function sheetGuests() {
 // Statistiques
 let statsFilter = { mode: 'all', month: D(0).slice(0,7), year: D(0).slice(0,4) };
 function sheetStats() {
+  if (!isAdmin()) { toast('⛔ Réservé à l\'administrateur'); return; }
   const bks = S.bookings.filter(b => {
     if (statsFilter.mode === 'month') return b.checkIn.slice(0,7) === statsFilter.month;
     if (statsFilter.mode === 'year') return b.checkIn.slice(0,4) === statsFilter.year;
@@ -649,6 +701,7 @@ function sheetStats() {
 
 // Réglages
 function sheetSettings() {
+  if (!isAdmin()) { toast('⛔ Réservé à l\'administrateur'); return; }
   openSheet(`
     <h2>⚙️ Réglages</h2>
     <div class="sec-title">Logements</div>
@@ -658,6 +711,14 @@ function sheetSettings() {
       <span class="dim">›</span>
     </div>`).join('') : '<div class="empty small">Aucun logement — ajoutez le premier ci-dessous</div>'}</div>
     <button class="btn ghost block" data-add-prop>+ Ajouter un logement</button>
+    ${isNative() ? `<div class="sec-title">Comptes (empreinte digitale)</div>
+    <div class="card">
+      <label class="small muted">Nom du compte Admin</label>
+      <input data-account-name="admin" value="${S.accounts.admin.name}" style="${FIELD}">
+      <label class="small muted">Nom du compte Utilisateur</label>
+      <input data-account-name="user" value="${S.accounts.user.name}" style="width:100%;margin:6px 0 0;padding:11px;border-radius:10px;background:var(--card2);color:var(--txt);border:1px solid var(--line)">
+      <div class="tiny muted" style="margin-top:8px">L'Admin a accès à tout. L'Utilisateur voit Tableau, Planning, Ménage, Check-in/Check-out, Livret et Voyageurs, mais pas Tarification, Statistiques ni Réglages.</div>
+    </div>` : ''}
     <div class="sec-title">Données</div>
     <div class="card">
       <button class="btn ghost block" data-reset>♻️ Réinitialiser l'application</button>
@@ -828,6 +889,11 @@ function bindCommon(root) {
   root.querySelectorAll('[data-msg]').forEach(el => el.onclick = e => { e.stopPropagation(); closeSheet(); sheetThread(el.dataset.msg); });
   root.querySelectorAll('[data-goto]').forEach(el => el.onclick = () => { TAB = el.dataset.goto; render(); });
   root.querySelectorAll('[data-add]').forEach(el => el.onclick = sheetAdd);
+  root.querySelectorAll('[data-lock]').forEach(el => el.onclick = lockApp);
+  root.querySelectorAll('[data-account-name]').forEach(el => el.onblur = () => {
+    S.accounts[el.dataset.accountName].name = el.value.trim() || (el.dataset.accountName === 'admin' ? 'Admin' : 'Utilisateur');
+    save();
+  });
   root.querySelectorAll('[data-plan]').forEach(el => el.onclick = () => {
     const v = +el.dataset.plan; planStart = v === 0 ? 0 : planStart + v; render();
   });
@@ -946,4 +1012,4 @@ function escapeHtml(s) { return s.replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt
 
 // ---------- Boot ----------
 load();
-render();
+if (isNative() && !currentRole) renderLock(); else render();
