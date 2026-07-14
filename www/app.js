@@ -47,7 +47,7 @@ function seed() {
     cleaners: [],
     autoMessages: DEFAULT_AUTO_MESSAGES(),
     activePid: 'all',
-    accounts: { admin: { name: 'Admin' }, user: { name: 'Utilisateur' } },
+    accounts: { admin: { name: 'Admin', password: 'Pialou2023-' }, user: { name: 'Utilisateur' } },
     v: 2,
   };
 }
@@ -59,52 +59,48 @@ function load() {
   try { S = JSON.parse(localStorage.getItem(KEY)); } catch (e) { S = null; }
   if (!S || S.v !== 2) { S = seed(); save(); }
   if (!S.accounts) { S.accounts = seed().accounts; save(); }
+  if (S.accounts.admin.password === undefined) { S.accounts.admin.password = 'Pialou2023-'; save(); }
 }
 function save() { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} }
 const prop = id => S.properties.find(p => p.id === id);
 const booking = id => S.bookings.find(b => b.id === id);
 
-// ---------- Authentification (empreinte digitale, APK Android uniquement) ----------
-// Sur web/PWA (pas de runtime Capacitor natif), l'app reste ouverte sans
-// restriction, comme avant. Sur l'APK, un verrou par empreinte s'affiche au
-// lancement et distingue deux rôles : admin (tout) et user (opérationnel).
-const isNative = () => !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
-let currentRole = isNative() ? null : 'admin';
+// ---------- Authentification (mot de passe Admin, accès direct Utilisateur) ----------
+// Deux comptes : Admin (protégé par mot de passe, accès complet) et
+// Utilisateur (aucun mot de passe, accès direct, droits restreints).
+let currentRole = null;
 const isAdmin = () => currentRole === 'admin';
 
 function renderLock() {
   app.innerHTML = `
     <div class="screen" style="display:flex;flex-direction:column;justify-content:center;align-items:center;gap:22px;min-height:calc(100vh - var(--nav-h) - var(--safe-b) - var(--safe-t) - 32px);padding:24px;text-align:center">
       <img src="img/logo-chalets-du-pialou.jpg" alt="" style="width:88px;height:88px;border-radius:20px;object-fit:cover">
-      <div><h1 style="margin:0 0 4px">GestHôte</h1><div class="small muted">Authentifiez-vous pour continuer</div></div>
+      <div><h1 style="margin:0 0 4px">GestHôte</h1><div class="small muted">Choisissez votre compte</div></div>
       <div style="display:flex;flex-direction:column;gap:12px;width:100%;max-width:320px">
         <button class="btn block" data-login="admin">👤 ${S.accounts.admin.name}</button>
         <button class="btn ghost block" data-login="user">👤 ${S.accounts.user.name}</button>
       </div>
-      <div id="lock-msg" class="small muted"></div>
+      <div id="lock-form" style="width:100%;max-width:320px"></div>
     </div>`;
   app.querySelectorAll('[data-login]').forEach(el => el.onclick = () => attemptLogin(el.dataset.login));
 }
 
-async function attemptLogin(role) {
-  const msg = document.getElementById('lock-msg');
-  const Bio = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.BiometricAuthNative;
-  if (!Bio) { currentRole = role; render(); return; }
-  try {
-    const check = await Bio.checkBiometry();
-    if (!check || !check.isAvailable) { currentRole = role; render(); return; }
-    await Bio.authenticate({
-      reason: 'Authentification pour ouvrir GestHôte',
-      cancelTitle: 'Annuler',
-      allowDeviceCredential: true,
-      androidTitle: 'GestHôte',
-      androidSubtitle: S.accounts[role].name,
-    });
-    currentRole = role;
-    render();
-  } catch (e) {
-    if (msg) msg.textContent = '⛔ Authentification annulée ou échouée — réessayez.';
-  }
+function attemptLogin(role) {
+  if (role === 'user') { currentRole = 'user'; render(); return; }
+  const box = document.getElementById('lock-form');
+  box.innerHTML = `
+    <input id="admin-pass" type="password" placeholder="Mot de passe Admin" autofocus
+      style="width:100%;margin-top:6px;padding:11px;border-radius:10px;background:var(--card2);color:var(--txt);border:1px solid var(--line);text-align:center">
+    <button class="btn block" id="admin-pass-go" style="margin-top:10px">Se connecter</button>
+    <div id="lock-msg" class="small muted" style="margin-top:8px"></div>`;
+  const input = box.querySelector('#admin-pass');
+  input.focus();
+  const submit = () => {
+    if (input.value === S.accounts.admin.password) { currentRole = 'admin'; render(); }
+    else { document.getElementById('lock-msg').textContent = '⛔ Mot de passe incorrect.'; input.value = ''; input.focus(); }
+  };
+  box.querySelector('#admin-pass-go').onclick = submit;
+  input.addEventListener('keydown', e => { if (e.key === 'Enter') submit(); });
 }
 
 function lockApp() { currentRole = null; renderLock(); }
@@ -344,7 +340,7 @@ function vPlus() {
       <div class="grow"><div class="title">${l}</div><div class="small muted">${s}</div></div>
       <span class="dim">›</span></div>`).join('')}
   </div>
-  ${isNative() ? `<button class="btn ghost block" data-lock>🔒 Changer de compte</button>` : ''}
+  <button class="btn ghost block" data-lock>🔒 Changer de compte</button>
   <div class="card small muted">GestHôte v${window.APP_VERSION} — démo. Données locales à cet appareil.</div>`;
 }
 
@@ -711,14 +707,16 @@ function sheetSettings() {
       <span class="dim">›</span>
     </div>`).join('') : '<div class="empty small">Aucun logement — ajoutez le premier ci-dessous</div>'}</div>
     <button class="btn ghost block" data-add-prop>+ Ajouter un logement</button>
-    ${isNative() ? `<div class="sec-title">Comptes (empreinte digitale)</div>
+    <div class="sec-title">Comptes</div>
     <div class="card">
       <label class="small muted">Nom du compte Admin</label>
       <input data-account-name="admin" value="${S.accounts.admin.name}" style="${FIELD}">
+      <label class="small muted">Mot de passe Admin</label>
+      <input data-account-password="admin" type="text" value="${S.accounts.admin.password}" style="${FIELD}">
       <label class="small muted">Nom du compte Utilisateur</label>
       <input data-account-name="user" value="${S.accounts.user.name}" style="width:100%;margin:6px 0 0;padding:11px;border-radius:10px;background:var(--card2);color:var(--txt);border:1px solid var(--line)">
-      <div class="tiny muted" style="margin-top:8px">L'Admin a accès à tout. L'Utilisateur voit Tableau, Planning, Ménage, Check-in/Check-out, Livret et Voyageurs, mais pas Tarification, Statistiques ni Réglages.</div>
-    </div>` : ''}
+      <div class="tiny muted" style="margin-top:8px">L'Admin a accès à tout (mot de passe requis). L'Utilisateur entre sans mot de passe et voit Tableau, Planning, Ménage, Check-in/Check-out, Livret et Voyageurs, mais pas Tarification, Statistiques ni Réglages.</div>
+    </div>
     <div class="sec-title">Données</div>
     <div class="card">
       <button class="btn ghost block" data-reset>♻️ Réinitialiser l'application</button>
@@ -894,6 +892,10 @@ function bindCommon(root) {
     S.accounts[el.dataset.accountName].name = el.value.trim() || (el.dataset.accountName === 'admin' ? 'Admin' : 'Utilisateur');
     save();
   });
+  root.querySelectorAll('[data-account-password]').forEach(el => el.onblur = () => {
+    S.accounts[el.dataset.accountPassword].password = el.value;
+    save();
+  });
   root.querySelectorAll('[data-plan]').forEach(el => el.onclick = () => {
     const v = +el.dataset.plan; planStart = v === 0 ? 0 : planStart + v; render();
   });
@@ -1012,4 +1014,4 @@ function escapeHtml(s) { return s.replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt
 
 // ---------- Boot ----------
 load();
-if (isNative() && !currentRole) renderLock(); else render();
+renderLock();
