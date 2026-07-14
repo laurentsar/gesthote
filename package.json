@@ -5,7 +5,7 @@
   "description": "Gestion de locations courte durée (PMS + channel manager) — style Superhote",
   "scripts": { "sync": "cap sync android", "open": "cap open android" },
   "dependencies": {
-    "@aparajita/capacitor-biometric-auth": "^9.0.0",
+    "@aparajita/capacitor-biometric-auth": "8.0.2",
     "@capacitor/android": "^6.2.1",
     "@capacitor/cli": "^6.2.1",
     "@capacitor/core": "^6.2.1",
