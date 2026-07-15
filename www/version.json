@@ -1,4 +1,4 @@
 {
-  "version": "1.5.1",
-  "notes": "Corrige un décalage d'un jour dans le planning et les dates (bug de fuseau horaire). Le menu Ménages n'affiche plus que les interventions à venir, triées par date, avec passage automatique en « À faire » le jour du départ."
+  "version": "1.6.0",
+  "notes": "Le passage d'un ménage à « Fait » demande le nombre de serviettes, de paires de draps et le temps passé. Nouvel écran Plus → Historique des ménages (filtrable par mois/intervenant, tout éditable). Voyants rouges dans Entretien si le chlore piscine (> 7 j) ou l'arrosage (> 3 j) sont en retard."
 }
