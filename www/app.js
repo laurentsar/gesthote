@@ -331,6 +331,7 @@ function vPlus() {
   const items = [
     ['cleaning', '🧹', 'Ménages', `${S.cleaning.filter(c=>c.status!=='done').length} à venir`],
     ['checkio', '🔑', 'Entretien', 'Codes, piscine, jacuzzi, arrosage'],
+    ['cleanhist', '🧺', 'Historique des ménages', `${S.cleaning.filter(c=>c.status==='done').length} enregistré(s)`],
     ...(isAdmin() ? [
       ['stats', '📈', 'Statistiques', 'Revenus & occupation'],
       ['settings', '⚙️', 'Réglages', 'Logements, démo'],
@@ -499,6 +500,84 @@ function sheetCleaning() {
   `);
 }
 
+// Confirmation de fin de ménage : quantité de linge à laver
+function sheetCleanDone(id) {
+  const c = S.cleaning.find(x => x.id === id), p = prop(c.pid);
+  openSheet(`
+    <h2>✅ Ménage terminé</h2>
+    <div class="small muted" style="margin-bottom:10px">${p.emoji} ${p.name} — ${fmtDateJ(c.date)}</div>
+    <div class="card">
+      <label class="small muted">Nombre de serviettes</label>
+      <input id="f-towels" type="number" inputmode="numeric" min="0" value="${c.towels ?? ''}" style="${FIELD}">
+      <label class="small muted">Nombre de paires de draps</label>
+      <input id="f-sheets" type="number" inputmode="numeric" min="0" value="${c.sheetPairs ?? ''}" style="${FIELD}">
+      <label class="small muted">Temps passé</label>
+      <div style="display:flex;gap:10px">
+        <div style="flex:1"><input id="f-hours" type="number" inputmode="numeric" min="0" placeholder="Heures" value="${c.durationMin!==undefined?Math.floor(c.durationMin/60):''}" style="margin-top:6px;padding:10px;border-radius:10px;background:var(--card2);color:var(--txt);border:1px solid var(--line);width:100%"></div>
+        <div style="flex:1"><select id="f-minutes" style="margin-top:6px;padding:10px;border-radius:10px;background:var(--card2);color:var(--txt);border:1px solid var(--line);width:100%">
+          ${[0,10,20,30,40,50].map(m => `<option value="${m}" ${c.durationMin!==undefined && c.durationMin%60===m?'selected':''}>${m} min</option>`).join('')}
+        </select></div>
+      </div>
+    </div>
+    <div class="btn-row even" style="margin-top:4px">
+      <button class="btn ghost" data-clean-done-cancel>Annuler</button>
+      <button class="btn" data-clean-done-confirm="${id}">Valider</button>
+    </div>
+  `);
+}
+
+// Historique des ménages effectués : consultation, édition, filtres mois/intervenant
+let cleanHistoryFilter = { month: '', cleaner: 'all' };
+function sheetCleaningHistory() {
+  const list = S.cleaning.filter(c => c.status === 'done')
+    .filter(c => !cleanHistoryFilter.month || c.date.slice(0,7) === cleanHistoryFilter.month)
+    .filter(c => cleanHistoryFilter.cleaner === 'all' || c.cleaner === cleanHistoryFilter.cleaner)
+    .sort((a,b) => b.date.localeCompare(a.date));
+  const minuteSelect = c => `<select data-hist-minutes="${c.id}" style="margin-top:6px;padding:10px;border-radius:10px;background:var(--card2);color:var(--txt);border:1px solid var(--line);width:100%">
+    ${[0,10,20,30,40,50].map(m => `<option value="${m}" ${(c.durationMin||0)%60===m?'selected':''}>${m} min</option>`).join('')}
+  </select>`;
+  const item = c => {
+    const p = prop(c.pid);
+    return `<div class="card">
+      <div class="row" style="border:0;padding:0 0 8px">
+        <div class="avatar" style="background:${p.color}">${p.emoji}</div>
+        <div class="grow title small">${p.name}</div>
+      </div>
+      <label class="small muted">Date</label>
+      <input type="date" data-hist-date="${c.id}" value="${c.date}" style="${FIELD}">
+      <label class="small muted">Intervenant</label>
+      <select data-hist-cleaner="${c.id}" style="${FIELD}">
+        <option value="">—</option>
+        ${S.cleaners.map(n => `<option value="${n}" ${c.cleaner===n?'selected':''}>${n}</option>`).join('')}
+      </select>
+      <div style="display:flex;gap:10px">
+        <div style="flex:1"><label class="small muted">Heures</label>
+          <input type="number" inputmode="numeric" min="0" data-hist-hours="${c.id}" value="${Math.floor((c.durationMin||0)/60)}" style="margin-top:6px;padding:10px;border-radius:10px;background:var(--card2);color:var(--txt);border:1px solid var(--line);width:100%"></div>
+        <div style="flex:1"><label class="small muted">Minutes</label>${minuteSelect(c)}</div>
+      </div>
+      <div style="display:flex;gap:10px;margin-top:12px">
+        <div style="flex:1"><label class="small muted">Serviettes</label>
+          <input type="number" inputmode="numeric" min="0" data-hist-towels="${c.id}" value="${c.towels||0}" style="margin-top:6px;padding:10px;border-radius:10px;background:var(--card2);color:var(--txt);border:1px solid var(--line);width:100%"></div>
+        <div style="flex:1"><label class="small muted">Paires de draps</label>
+          <input type="number" inputmode="numeric" min="0" data-hist-sheets="${c.id}" value="${c.sheetPairs||0}" style="margin-top:6px;padding:10px;border-radius:10px;background:var(--card2);color:var(--txt);border:1px solid var(--line);width:100%"></div>
+      </div>
+    </div>`;
+  };
+  openSheet(`
+    <h2>🧺 Historique des ménages</h2>
+    <div class="card">
+      <label class="small muted">Filtrer par mois</label>
+      <input type="month" data-hist-filter-month value="${cleanHistoryFilter.month}" style="${FIELD}">
+      <label class="small muted">Filtrer par intervenant</label>
+      <select data-hist-filter-cleaner style="width:100%;margin:6px 0 0;padding:11px;border-radius:10px;background:var(--card2);color:var(--txt);border:1px solid var(--line)">
+        <option value="all" ${cleanHistoryFilter.cleaner==='all'?'selected':''}>Tous les intervenants</option>
+        ${S.cleaners.map(n => `<option value="${n}" ${cleanHistoryFilter.cleaner===n?'selected':''}>${n}</option>`).join('')}
+      </select>
+    </div>
+    ${list.length ? list.map(item).join('') : '<div class="empty small">Aucun ménage effectué pour ces filtres</div>'}
+  `);
+}
+
 // Gestion de la liste des intervenants ménage
 function sheetCleaners() {
   openSheet(`
@@ -519,10 +598,12 @@ function sheetCleaners() {
 // Check-in / Check-out : accès et entretien par logement
 function sheetCheckInOut() {
   if (!S.properties.length) {
-    openSheet(`<h2>🔑 Check-in / Check-out</h2><div class="empty small">Ajoutez d'abord un logement dans Réglages pour gérer ses accès et son entretien.</div>`);
+    openSheet(`<h2>🔑 Entretien</h2><div class="empty small">Ajoutez d'abord un logement dans Réglages pour gérer ses accès et son entretien.</div>`);
     return;
   }
   const p = S.activePid === 'all' ? S.properties[0] : prop(S.activePid);
+  const overdue = (dateVal, days) => !dateVal || nightsBetween(dateVal, D(0)) > days;
+  const dot = (label, overdueFlag) => overdueFlag ? `${label} <span title="En retard" style="display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--bad);margin-left:4px;vertical-align:middle"></span>` : label;
   openSheet(`
     <h2>🔑 Entretien</h2>
     <div class="chips">${S.properties.map(x => `<button class="chip ${x.id===p.id?'ai':''}" data-checkio="${x.id}">${x.emoji} ${x.name}</button>`).join('')}</div>
@@ -537,13 +618,13 @@ function sheetCheckInOut() {
 
     <div class="sec-title">Entretien</div>
     <div class="card">
-      <label class="small muted">🧪 Chlore piscine — dernier passage</label>
+      <label class="small muted">${dot('🧪 Chlore piscine — dernier passage', overdue(p.poolChlorineDate, 7))}</label>
       <input type="date" data-checkio-date="${p.id}|poolChlorineDate" value="${p.poolChlorineDate || ''}" style="${FIELD}">
       <label class="small muted">🛁 Jacuzzi vidé le</label>
       <input type="date" data-checkio-date="${p.id}|jacuzziEmptiedDate" value="${p.jacuzziEmptiedDate || ''}" style="${FIELD}">
       <label class="small muted">🛁 Jacuzzi rempli le</label>
       <input type="date" data-checkio-date="${p.id}|jacuzziFilledDate" value="${p.jacuzziFilledDate || ''}" style="${FIELD}">
-      <label class="small muted">🌿 Arrosé le</label>
+      <label class="small muted">${dot('🌿 Arrosé le', overdue(p.wateredDate, 3))}</label>
       <input type="date" data-checkio-date="${p.id}|wateredDate" value="${p.wateredDate || ''}" style="width:100%;margin:6px 0 0;padding:11px;border-radius:10px;background:var(--card2);color:var(--txt);border:1px solid var(--line)">
     </div>
   `);
@@ -797,7 +878,7 @@ function bindCommon(root) {
     const v = +el.dataset.plan; planStart = v === 0 ? 0 : planStart + v; render();
   });
   root.querySelectorAll('[data-more]').forEach(el => el.onclick = () => {
-    ({ cleaning: sheetCleaning, checkio: sheetCheckInOut, stats: sheetStats, settings: sheetSettings }[el.dataset.more])();
+    ({ cleaning: sheetCleaning, checkio: sheetCheckInOut, cleanhist: sheetCleaningHistory, stats: sheetStats, settings: sheetSettings }[el.dataset.more])();
   });
   // Thread actions
   root.querySelectorAll('[data-send]').forEach(el => el.onclick = () => {
@@ -824,12 +905,51 @@ function bindCommon(root) {
   });
   root.querySelectorAll('[data-clean]').forEach(el => el.onclick = () => {
     const c = S.cleaning.find(x => x.id === el.dataset.clean);
-    c.status = c.status === 'planned' ? 'todo' : c.status === 'todo' ? 'done' : 'planned';
+    if (c.status === 'todo') { closeSheet(); sheetCleanDone(c.id); return; }
+    c.status = c.status === 'planned' ? 'todo' : 'planned';
     save(); closeSheet(); sheetCleaning();
+  });
+  root.querySelectorAll('[data-clean-done-cancel]').forEach(el => el.onclick = () => { closeSheet(); sheetCleaning(); });
+  root.querySelectorAll('[data-clean-done-confirm]').forEach(el => el.onclick = () => {
+    const c = S.cleaning.find(x => x.id === el.dataset.cleanDoneConfirm);
+    const sg = document.querySelector('.sheet-bg');
+    c.towels = +sg.querySelector('#f-towels').value || 0;
+    c.sheetPairs = +sg.querySelector('#f-sheets').value || 0;
+    c.durationMin = (+sg.querySelector('#f-hours').value || 0) * 60 + (+sg.querySelector('#f-minutes').value || 0);
+    c.status = 'done';
+    save(); closeSheet();
+    toast(`✅ Ménage terminé — ${c.towels} serviette(s), ${c.sheetPairs} paire(s) de draps, ${Math.floor(c.durationMin/60)}h${String(c.durationMin%60).padStart(2,'0')}`);
+    sheetCleaning();
   });
   root.querySelectorAll('[data-clean-assign]').forEach(el => el.onchange = () => {
     const c = S.cleaning.find(x => x.id === el.dataset.cleanAssign);
     c.cleaner = el.value; save();
+  });
+  root.querySelectorAll('[data-hist-date]').forEach(el => el.onchange = () => {
+    const c = S.cleaning.find(x => x.id === el.dataset.histDate); c.date = el.value; save();
+  });
+  root.querySelectorAll('[data-hist-cleaner]').forEach(el => el.onchange = () => {
+    const c = S.cleaning.find(x => x.id === el.dataset.histCleaner); c.cleaner = el.value; save();
+  });
+  root.querySelectorAll('[data-hist-towels]').forEach(el => el.onblur = () => {
+    const c = S.cleaning.find(x => x.id === el.dataset.histTowels); c.towels = +el.value || 0; save();
+  });
+  root.querySelectorAll('[data-hist-sheets]').forEach(el => el.onblur = () => {
+    const c = S.cleaning.find(x => x.id === el.dataset.histSheets); c.sheetPairs = +el.value || 0; save();
+  });
+  const updateHistDuration = el => {
+    const card = el.closest('.card');
+    const hoursEl = card.querySelector('[data-hist-hours]'), minutesEl = card.querySelector('[data-hist-minutes]');
+    const c = S.cleaning.find(x => x.id === (el.dataset.histHours || el.dataset.histMinutes));
+    c.durationMin = (+hoursEl.value || 0) * 60 + (+minutesEl.value || 0); save();
+  };
+  root.querySelectorAll('[data-hist-hours]').forEach(el => el.onblur = () => updateHistDuration(el));
+  root.querySelectorAll('[data-hist-minutes]').forEach(el => el.onchange = () => updateHistDuration(el));
+  root.querySelectorAll('[data-hist-filter-month]').forEach(el => el.onchange = () => {
+    cleanHistoryFilter.month = el.value; closeSheet(); sheetCleaningHistory();
+  });
+  root.querySelectorAll('[data-hist-filter-cleaner]').forEach(el => el.onchange = () => {
+    cleanHistoryFilter.cleaner = el.value; closeSheet(); sheetCleaningHistory();
   });
   root.querySelectorAll('[data-clean-comment]').forEach(el => el.onblur = () => {
     const c = S.cleaning.find(x => x.id === el.dataset.cleanComment);
