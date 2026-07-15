@@ -598,10 +598,11 @@ function sheetCleaners() {
 // Check-in / Check-out : accès et entretien par logement
 function sheetCheckInOut() {
   if (!S.properties.length) {
-    openSheet(`<h2>🔑 Check-in / Check-out</h2><div class="empty small">Ajoutez d'abord un logement dans Réglages pour gérer ses accès et son entretien.</div>`);
+    openSheet(`<h2>🔑 Entretien</h2><div class="empty small">Ajoutez d'abord un logement dans Réglages pour gérer ses accès et son entretien.</div>`);
     return;
   }
   const p = S.activePid === 'all' ? S.properties[0] : prop(S.activePid);
+  const chlorineOverdue = !p.poolChlorineDate || nightsBetween(p.poolChlorineDate, D(0)) > 7;
   openSheet(`
     <h2>🔑 Entretien</h2>
     <div class="chips">${S.properties.map(x => `<button class="chip ${x.id===p.id?'ai':''}" data-checkio="${x.id}">${x.emoji} ${x.name}</button>`).join('')}</div>
@@ -616,7 +617,7 @@ function sheetCheckInOut() {
 
     <div class="sec-title">Entretien</div>
     <div class="card">
-      <label class="small muted">🧪 Chlore piscine — dernier passage</label>
+      <label class="small muted">🧪 Chlore piscine — dernier passage ${chlorineOverdue ? `<span title="Plus d'une semaine sans chlore" style="display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--bad);margin-left:4px;vertical-align:middle"></span>` : ''}</label>
       <input type="date" data-checkio-date="${p.id}|poolChlorineDate" value="${p.poolChlorineDate || ''}" style="${FIELD}">
       <label class="small muted">🛁 Jacuzzi vidé le</label>
       <input type="date" data-checkio-date="${p.id}|jacuzziEmptiedDate" value="${p.jacuzziEmptiedDate || ''}" style="${FIELD}">
