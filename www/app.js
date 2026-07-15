@@ -331,6 +331,7 @@ function vPlus() {
   const items = [
     ['cleaning', '🧹', 'Ménages', `${S.cleaning.filter(c=>c.status!=='done').length} à venir`],
     ['checkio', '🔑', 'Entretien', 'Codes, piscine, jacuzzi, arrosage'],
+    ['cleanhist', '🧺', 'Historique des ménages', `${S.cleaning.filter(c=>c.status==='done').length} enregistré(s)`],
     ...(isAdmin() ? [
       ['stats', '📈', 'Statistiques', 'Revenus & occupation'],
       ['settings', '⚙️', 'Réglages', 'Logements, démo'],
@@ -522,6 +523,58 @@ function sheetCleanDone(id) {
       <button class="btn ghost" data-clean-done-cancel>Annuler</button>
       <button class="btn" data-clean-done-confirm="${id}">Valider</button>
     </div>
+  `);
+}
+
+// Historique des ménages effectués : consultation, édition, filtres mois/intervenant
+let cleanHistoryFilter = { month: '', cleaner: 'all' };
+function sheetCleaningHistory() {
+  const list = S.cleaning.filter(c => c.status === 'done')
+    .filter(c => !cleanHistoryFilter.month || c.date.slice(0,7) === cleanHistoryFilter.month)
+    .filter(c => cleanHistoryFilter.cleaner === 'all' || c.cleaner === cleanHistoryFilter.cleaner)
+    .sort((a,b) => b.date.localeCompare(a.date));
+  const minuteSelect = c => `<select data-hist-minutes="${c.id}" style="margin-top:6px;padding:10px;border-radius:10px;background:var(--card2);color:var(--txt);border:1px solid var(--line);width:100%">
+    ${[0,10,20,30,40,50].map(m => `<option value="${m}" ${(c.durationMin||0)%60===m?'selected':''}>${m} min</option>`).join('')}
+  </select>`;
+  const item = c => {
+    const p = prop(c.pid);
+    return `<div class="card">
+      <div class="row" style="border:0;padding:0 0 8px">
+        <div class="avatar" style="background:${p.color}">${p.emoji}</div>
+        <div class="grow title small">${p.name}</div>
+      </div>
+      <label class="small muted">Date</label>
+      <input type="date" data-hist-date="${c.id}" value="${c.date}" style="${FIELD}">
+      <label class="small muted">Intervenant</label>
+      <select data-hist-cleaner="${c.id}" style="${FIELD}">
+        <option value="">—</option>
+        ${S.cleaners.map(n => `<option value="${n}" ${c.cleaner===n?'selected':''}>${n}</option>`).join('')}
+      </select>
+      <div style="display:flex;gap:10px">
+        <div style="flex:1"><label class="small muted">Heures</label>
+          <input type="number" inputmode="numeric" min="0" data-hist-hours="${c.id}" value="${Math.floor((c.durationMin||0)/60)}" style="margin-top:6px;padding:10px;border-radius:10px;background:var(--card2);color:var(--txt);border:1px solid var(--line);width:100%"></div>
+        <div style="flex:1"><label class="small muted">Minutes</label>${minuteSelect(c)}</div>
+      </div>
+      <div style="display:flex;gap:10px;margin-top:12px">
+        <div style="flex:1"><label class="small muted">Serviettes</label>
+          <input type="number" inputmode="numeric" min="0" data-hist-towels="${c.id}" value="${c.towels||0}" style="margin-top:6px;padding:10px;border-radius:10px;background:var(--card2);color:var(--txt);border:1px solid var(--line);width:100%"></div>
+        <div style="flex:1"><label class="small muted">Paires de draps</label>
+          <input type="number" inputmode="numeric" min="0" data-hist-sheets="${c.id}" value="${c.sheetPairs||0}" style="margin-top:6px;padding:10px;border-radius:10px;background:var(--card2);color:var(--txt);border:1px solid var(--line);width:100%"></div>
+      </div>
+    </div>`;
+  };
+  openSheet(`
+    <h2>🧺 Historique des ménages</h2>
+    <div class="card">
+      <label class="small muted">Filtrer par mois</label>
+      <input type="month" data-hist-filter-month value="${cleanHistoryFilter.month}" style="${FIELD}">
+      <label class="small muted">Filtrer par intervenant</label>
+      <select data-hist-filter-cleaner style="width:100%;margin:6px 0 0;padding:11px;border-radius:10px;background:var(--card2);color:var(--txt);border:1px solid var(--line)">
+        <option value="all" ${cleanHistoryFilter.cleaner==='all'?'selected':''}>Tous les intervenants</option>
+        ${S.cleaners.map(n => `<option value="${n}" ${cleanHistoryFilter.cleaner===n?'selected':''}>${n}</option>`).join('')}
+      </select>
+    </div>
+    ${list.length ? list.map(item).join('') : '<div class="empty small">Aucun ménage effectué pour ces filtres</div>'}
   `);
 }
 
@@ -823,7 +876,7 @@ function bindCommon(root) {
     const v = +el.dataset.plan; planStart = v === 0 ? 0 : planStart + v; render();
   });
   root.querySelectorAll('[data-more]').forEach(el => el.onclick = () => {
-    ({ cleaning: sheetCleaning, checkio: sheetCheckInOut, stats: sheetStats, settings: sheetSettings }[el.dataset.more])();
+    ({ cleaning: sheetCleaning, checkio: sheetCheckInOut, cleanhist: sheetCleaningHistory, stats: sheetStats, settings: sheetSettings }[el.dataset.more])();
   });
   // Thread actions
   root.querySelectorAll('[data-send]').forEach(el => el.onclick = () => {
@@ -869,6 +922,32 @@ function bindCommon(root) {
   root.querySelectorAll('[data-clean-assign]').forEach(el => el.onchange = () => {
     const c = S.cleaning.find(x => x.id === el.dataset.cleanAssign);
     c.cleaner = el.value; save();
+  });
+  root.querySelectorAll('[data-hist-date]').forEach(el => el.onchange = () => {
+    const c = S.cleaning.find(x => x.id === el.dataset.histDate); c.date = el.value; save();
+  });
+  root.querySelectorAll('[data-hist-cleaner]').forEach(el => el.onchange = () => {
+    const c = S.cleaning.find(x => x.id === el.dataset.histCleaner); c.cleaner = el.value; save();
+  });
+  root.querySelectorAll('[data-hist-towels]').forEach(el => el.onblur = () => {
+    const c = S.cleaning.find(x => x.id === el.dataset.histTowels); c.towels = +el.value || 0; save();
+  });
+  root.querySelectorAll('[data-hist-sheets]').forEach(el => el.onblur = () => {
+    const c = S.cleaning.find(x => x.id === el.dataset.histSheets); c.sheetPairs = +el.value || 0; save();
+  });
+  const updateHistDuration = el => {
+    const card = el.closest('.card');
+    const hoursEl = card.querySelector('[data-hist-hours]'), minutesEl = card.querySelector('[data-hist-minutes]');
+    const c = S.cleaning.find(x => x.id === (el.dataset.histHours || el.dataset.histMinutes));
+    c.durationMin = (+hoursEl.value || 0) * 60 + (+minutesEl.value || 0); save();
+  };
+  root.querySelectorAll('[data-hist-hours]').forEach(el => el.onblur = () => updateHistDuration(el));
+  root.querySelectorAll('[data-hist-minutes]').forEach(el => el.onchange = () => updateHistDuration(el));
+  root.querySelectorAll('[data-hist-filter-month]').forEach(el => el.onchange = () => {
+    cleanHistoryFilter.month = el.value; closeSheet(); sheetCleaningHistory();
+  });
+  root.querySelectorAll('[data-hist-filter-cleaner]').forEach(el => el.onchange = () => {
+    cleanHistoryFilter.cleaner = el.value; closeSheet(); sheetCleaningHistory();
   });
   root.querySelectorAll('[data-clean-comment]').forEach(el => el.onblur = () => {
     const c = S.cleaning.find(x => x.id === el.dataset.cleanComment);
