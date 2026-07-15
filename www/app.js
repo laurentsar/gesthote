@@ -7,7 +7,10 @@
 const DAY = 86400000;
 const today0 = () => { const d = new Date(); d.setHours(0,0,0,0); return d; };
 const d = off => new Date(today0().getTime() + off * DAY);        // Date à J+off
-const iso = dt => new Date(dt).toISOString().slice(0, 10);        // 'YYYY-MM-DD'
+const iso = dt => {                                               // 'YYYY-MM-DD' (fuseau local)
+  const x = new Date(dt);
+  return `${x.getFullYear()}-${String(x.getMonth()+1).padStart(2,'0')}-${String(x.getDate()).padStart(2,'0')}`;
+};
 const D = off => iso(d(off));                                     // iso à J+off
 const parse = s => { const [y,m,day] = s.split('-').map(Number); return new Date(y, m-1, day); };
 const nightsBetween = (a, b) => Math.round((parse(b) - parse(a)) / DAY);
@@ -60,6 +63,9 @@ function load() {
   if (!S || S.v !== 2) { S = seed(); save(); }
   if (!S.accounts) { S.accounts = seed().accounts; save(); }
   if (S.accounts.admin.password === undefined) { S.accounts.admin.password = 'Pialou2023-'; save(); }
+  let changed = false;
+  S.cleaning.forEach(c => { if (c.status === 'planned' && c.date <= D(0)) { c.status = 'todo'; changed = true; } });
+  if (changed) save();
 }
 function save() { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} }
 const prop = id => S.properties.find(p => p.id === id);
@@ -468,7 +474,7 @@ function renderAutoTemplate(msgId, b) {
 
 // Ménage
 function sheetCleaning() {
-  const list = filtered(S.cleaning);
+  const list = filtered(S.cleaning).filter(c => c.status !== 'done').sort((a,b) => a.date.localeCompare(b.date));
   const item = c => {
     const b = booking(c.bookingId), p = prop(c.pid);
     const st = { done:['ok','Fait'], todo:['warn','À faire'], planned:['info','Planifié'] }[c.status];
