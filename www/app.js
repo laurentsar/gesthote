@@ -499,6 +499,25 @@ function sheetCleaning() {
   `);
 }
 
+// Confirmation de fin de ménage : quantité de linge à laver
+function sheetCleanDone(id) {
+  const c = S.cleaning.find(x => x.id === id), p = prop(c.pid);
+  openSheet(`
+    <h2>✅ Ménage terminé</h2>
+    <div class="small muted" style="margin-bottom:10px">${p.emoji} ${p.name} — ${fmtDateJ(c.date)}</div>
+    <div class="card">
+      <label class="small muted">Nombre de serviettes</label>
+      <input id="f-towels" type="number" inputmode="numeric" min="0" value="${c.towels ?? ''}" style="${FIELD}">
+      <label class="small muted">Nombre de paires de draps</label>
+      <input id="f-sheets" type="number" inputmode="numeric" min="0" value="${c.sheetPairs ?? ''}" style="width:100%;margin:6px 0 0;padding:11px;border-radius:10px;background:var(--card2);color:var(--txt);border:1px solid var(--line)">
+    </div>
+    <div class="btn-row even" style="margin-top:4px">
+      <button class="btn ghost" data-clean-done-cancel>Annuler</button>
+      <button class="btn" data-clean-done-confirm="${id}">Valider</button>
+    </div>
+  `);
+}
+
 // Gestion de la liste des intervenants ménage
 function sheetCleaners() {
   openSheet(`
@@ -824,8 +843,18 @@ function bindCommon(root) {
   });
   root.querySelectorAll('[data-clean]').forEach(el => el.onclick = () => {
     const c = S.cleaning.find(x => x.id === el.dataset.clean);
-    c.status = c.status === 'planned' ? 'todo' : c.status === 'todo' ? 'done' : 'planned';
+    if (c.status === 'todo') { closeSheet(); sheetCleanDone(c.id); return; }
+    c.status = c.status === 'planned' ? 'todo' : 'planned';
     save(); closeSheet(); sheetCleaning();
+  });
+  root.querySelectorAll('[data-clean-done-cancel]').forEach(el => el.onclick = () => { closeSheet(); sheetCleaning(); });
+  root.querySelectorAll('[data-clean-done-confirm]').forEach(el => el.onclick = () => {
+    const c = S.cleaning.find(x => x.id === el.dataset.cleanDoneConfirm);
+    const sg = document.querySelector('.sheet-bg');
+    c.towels = +sg.querySelector('#f-towels').value || 0;
+    c.sheetPairs = +sg.querySelector('#f-sheets').value || 0;
+    c.status = 'done';
+    save(); closeSheet(); toast(`✅ Ménage terminé — ${c.towels} serviette(s), ${c.sheetPairs} paire(s) de draps`); sheetCleaning();
   });
   root.querySelectorAll('[data-clean-assign]').forEach(el => el.onchange = () => {
     const c = S.cleaning.find(x => x.id === el.dataset.cleanAssign);
