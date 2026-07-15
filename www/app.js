@@ -509,7 +509,14 @@ function sheetCleanDone(id) {
       <label class="small muted">Nombre de serviettes</label>
       <input id="f-towels" type="number" inputmode="numeric" min="0" value="${c.towels ?? ''}" style="${FIELD}">
       <label class="small muted">Nombre de paires de draps</label>
-      <input id="f-sheets" type="number" inputmode="numeric" min="0" value="${c.sheetPairs ?? ''}" style="width:100%;margin:6px 0 0;padding:11px;border-radius:10px;background:var(--card2);color:var(--txt);border:1px solid var(--line)">
+      <input id="f-sheets" type="number" inputmode="numeric" min="0" value="${c.sheetPairs ?? ''}" style="${FIELD}">
+      <label class="small muted">Temps passé</label>
+      <div style="display:flex;gap:10px">
+        <div style="flex:1"><input id="f-hours" type="number" inputmode="numeric" min="0" placeholder="Heures" value="${c.durationMin!==undefined?Math.floor(c.durationMin/60):''}" style="margin-top:6px;padding:10px;border-radius:10px;background:var(--card2);color:var(--txt);border:1px solid var(--line);width:100%"></div>
+        <div style="flex:1"><select id="f-minutes" style="margin-top:6px;padding:10px;border-radius:10px;background:var(--card2);color:var(--txt);border:1px solid var(--line);width:100%">
+          ${[0,10,20,30,40,50].map(m => `<option value="${m}" ${c.durationMin!==undefined && c.durationMin%60===m?'selected':''}>${m} min</option>`).join('')}
+        </select></div>
+      </div>
     </div>
     <div class="btn-row even" style="margin-top:4px">
       <button class="btn ghost" data-clean-done-cancel>Annuler</button>
@@ -853,8 +860,11 @@ function bindCommon(root) {
     const sg = document.querySelector('.sheet-bg');
     c.towels = +sg.querySelector('#f-towels').value || 0;
     c.sheetPairs = +sg.querySelector('#f-sheets').value || 0;
+    c.durationMin = (+sg.querySelector('#f-hours').value || 0) * 60 + (+sg.querySelector('#f-minutes').value || 0);
     c.status = 'done';
-    save(); closeSheet(); toast(`✅ Ménage terminé — ${c.towels} serviette(s), ${c.sheetPairs} paire(s) de draps`); sheetCleaning();
+    save(); closeSheet();
+    toast(`✅ Ménage terminé — ${c.towels} serviette(s), ${c.sheetPairs} paire(s) de draps, ${Math.floor(c.durationMin/60)}h${String(c.durationMin%60).padStart(2,'0')}`);
+    sheetCleaning();
   });
   root.querySelectorAll('[data-clean-assign]').forEach(el => el.onchange = () => {
     const c = S.cleaning.find(x => x.id === el.dataset.cleanAssign);
