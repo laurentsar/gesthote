@@ -1,4 +1,4 @@
 {
-  "version": "1.4.0",
-  "notes": "Authentification par mot de passe pour le compte Admin (Utilisateur entre sans mot de passe). Retire l'empreinte digitale au profit d'un mot de passe éditable dans Réglages → Comptes."
+  "version": "1.5.0",
+  "notes": "Retire les menus Messages automatiques, Livret d'accueil, Voyageurs et Tarification dynamique (l'envoi auto des messages continue en coulisses). Renomme Ménage & turnover en Ménages et Check-in/Check-out en Entretien. Ajoute une pastille avec l'initiale de l'intervenant sur le planning, un menu déroulant pour l'année dans Statistiques, et positionne les réservations à la mi-journée dans le planning. Retire Abritel du sélecteur de canal."
 }
