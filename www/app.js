@@ -264,9 +264,11 @@ function vPlanning() {
       let bar = '';
       if (b) {
         const span = Math.min(b.nights, DAYS - i);
+        const clean = S.cleaning.find(c => c.bookingId === b.id);
+        const cleanerInitial = clean && clean.cleaner ? clean.cleaner.trim()[0].toUpperCase() : '';
         bar = `<div class="res-bar" data-open="${b.id}"
           style="background:${PLAT[b.plat].cls==='b-airbnb'?'#ff5a5f':PLAT[b.plat].cls==='b-booking'?'#3b82f6':PLAT[b.plat].cls==='b-direct'?'#a855f7':'#f59e0b'};
-          width:calc(${span*100}% + ${span-1}px);z-index:3">${b.guest.split(' ')[0]}</div>`;
+          width:calc(${span*100}% + ${span-1}px);z-index:3">${b.guest.split(' ')[0]}${cleanerInitial ? `<span class="clean-badge" title="Ménage : ${clean.cleaner}">${cleanerInitial}</span>` : ''}</div>`;
       }
       cells += `<td class="${wk?'wknd':''}">${bar}</td>`;
     }
@@ -321,8 +323,8 @@ function aiSuggest(convId) {
 // ================= PLUS (menu) =================
 function vPlus() {
   const items = [
-    ['cleaning', '🧹', 'Ménage & turnover', `${S.cleaning.filter(c=>c.status!=='done').length} à venir`],
-    ['checkio', '🔑', 'Check-in / Check-out', 'Codes, piscine, jacuzzi, arrosage'],
+    ['cleaning', '🧹', 'Ménages', `${S.cleaning.filter(c=>c.status!=='done').length} à venir`],
+    ['checkio', '🔑', 'Entretien', 'Codes, piscine, jacuzzi, arrosage'],
     ...(isAdmin() ? [
       ['stats', '📈', 'Statistiques', 'Revenus & occupation'],
       ['settings', '⚙️', 'Réglages', 'Logements, démo'],
@@ -484,7 +486,7 @@ function sheetCleaning() {
     </div>`;
   };
   openSheet(`
-    <h2>🧹 Ménage & turnover</h2>
+    <h2>🧹 Ménages</h2>
     <div class="small muted" style="margin-bottom:10px">Une intervention est créée à chaque départ. Choisissez qui s'en charge dans la liste, touchez le statut pour le faire avancer.</div>
     <div class="card">${list.length ? list.map(item).join('') : '<div class="empty small">Rien à nettoyer</div>'}</div>
     <button class="btn ghost block" data-manage-cleaners>⚙️ Gérer la liste des intervenants</button>
@@ -516,7 +518,7 @@ function sheetCheckInOut() {
   }
   const p = S.activePid === 'all' ? S.properties[0] : prop(S.activePid);
   openSheet(`
-    <h2>🔑 Check-in / Check-out</h2>
+    <h2>🔑 Entretien</h2>
     <div class="chips">${S.properties.map(x => `<button class="chip ${x.id===p.id?'ai':''}" data-checkio="${x.id}">${x.emoji} ${x.name}</button>`).join('')}</div>
 
     <div class="sec-title">Accès</div>
