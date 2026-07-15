@@ -602,7 +602,8 @@ function sheetCheckInOut() {
     return;
   }
   const p = S.activePid === 'all' ? S.properties[0] : prop(S.activePid);
-  const chlorineOverdue = !p.poolChlorineDate || nightsBetween(p.poolChlorineDate, D(0)) > 7;
+  const overdue = (dateVal, days) => !dateVal || nightsBetween(dateVal, D(0)) > days;
+  const dot = (label, overdueFlag) => overdueFlag ? `${label} <span title="En retard" style="display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--bad);margin-left:4px;vertical-align:middle"></span>` : label;
   openSheet(`
     <h2>🔑 Entretien</h2>
     <div class="chips">${S.properties.map(x => `<button class="chip ${x.id===p.id?'ai':''}" data-checkio="${x.id}">${x.emoji} ${x.name}</button>`).join('')}</div>
@@ -617,13 +618,13 @@ function sheetCheckInOut() {
 
     <div class="sec-title">Entretien</div>
     <div class="card">
-      <label class="small muted">🧪 Chlore piscine — dernier passage ${chlorineOverdue ? `<span title="Plus d'une semaine sans chlore" style="display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--bad);margin-left:4px;vertical-align:middle"></span>` : ''}</label>
+      <label class="small muted">${dot('🧪 Chlore piscine — dernier passage', overdue(p.poolChlorineDate, 7))}</label>
       <input type="date" data-checkio-date="${p.id}|poolChlorineDate" value="${p.poolChlorineDate || ''}" style="${FIELD}">
       <label class="small muted">🛁 Jacuzzi vidé le</label>
       <input type="date" data-checkio-date="${p.id}|jacuzziEmptiedDate" value="${p.jacuzziEmptiedDate || ''}" style="${FIELD}">
       <label class="small muted">🛁 Jacuzzi rempli le</label>
       <input type="date" data-checkio-date="${p.id}|jacuzziFilledDate" value="${p.jacuzziFilledDate || ''}" style="${FIELD}">
-      <label class="small muted">🌿 Arrosé le</label>
+      <label class="small muted">${dot('🌿 Arrosé le', overdue(p.wateredDate, 3))}</label>
       <input type="date" data-checkio-date="${p.id}|wateredDate" value="${p.wateredDate || ''}" style="width:100%;margin:6px 0 0;padding:11px;border-radius:10px;background:var(--card2);color:var(--txt);border:1px solid var(--line)">
     </div>
   `);
