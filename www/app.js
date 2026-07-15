@@ -268,7 +268,7 @@ function vPlanning() {
         const cleanerInitial = clean && clean.cleaner ? clean.cleaner.trim()[0].toUpperCase() : '';
         bar = `<div class="res-bar" data-open="${b.id}"
           style="background:${PLAT[b.plat].cls==='b-airbnb'?'#ff5a5f':PLAT[b.plat].cls==='b-booking'?'#3b82f6':PLAT[b.plat].cls==='b-direct'?'#a855f7':'#f59e0b'};
-          width:calc(${span*100}% + ${span-1}px);z-index:3">${b.guest.split(' ')[0]}${cleanerInitial ? `<span class="clean-badge" title="Ménage : ${clean.cleaner}">${cleanerInitial}</span>` : ''}</div>`;
+          left:calc(50% + 2px);width:calc(${span*100}% + ${span-1}px - 4px);z-index:3">${b.guest.split(' ')[0]}${cleanerInitial ? `<span class="clean-badge" title="Ménage : ${clean.cleaner}">${cleanerInitial}</span>` : ''}</div>`;
       }
       cells += `<td class="${wk?'wknd':''}">${bar}</td>`;
     }
@@ -294,7 +294,7 @@ function vPlanning() {
   </div>
   <div class="small muted" style="margin-top:6px">
     <span class="badge plat b-airbnb">Airbnb</span> <span class="badge plat b-booking">Booking</span>
-    <span class="badge plat b-direct">Direct</span> <span class="badge plat b-abritel">Abritel</span>
+    <span class="badge plat b-direct">Direct</span>
   </div>`;
 }
 
@@ -737,7 +737,7 @@ function sheetAdd() {
           <input id="f-guests" type="number" value="2" min="1" style="width:100%;margin-top:6px;padding:10px;border-radius:10px;background:var(--card2);color:var(--txt);border:1px solid var(--line)"></div>
         <div style="flex:1"><label class="small muted">Canal</label>
           <select id="f-plat" style="width:100%;margin-top:6px;padding:10px;border-radius:10px;background:var(--card2);color:var(--txt);border:1px solid var(--line)">
-            ${Object.entries(PLAT).map(([k,v])=>`<option value="${k}">${v.label}</option>`).join('')}</select></div>
+            ${Object.entries(PLAT).filter(([k])=>k!=='abritel').map(([k,v])=>`<option value="${k}">${v.label}</option>`).join('')}</select></div>
       </div>
     </div>
     <button class="btn block" data-save-add>Créer la réservation</button>
