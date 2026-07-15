@@ -264,9 +264,11 @@ function vPlanning() {
       let bar = '';
       if (b) {
         const span = Math.min(b.nights, DAYS - i);
+        const clean = S.cleaning.find(c => c.bookingId === b.id);
+        const cleanerInitial = clean && clean.cleaner ? clean.cleaner.trim()[0].toUpperCase() : '';
         bar = `<div class="res-bar" data-open="${b.id}"
           style="background:${PLAT[b.plat].cls==='b-airbnb'?'#ff5a5f':PLAT[b.plat].cls==='b-booking'?'#3b82f6':PLAT[b.plat].cls==='b-direct'?'#a855f7':'#f59e0b'};
-          width:calc(${span*100}% + ${span-1}px);z-index:3">${b.guest.split(' ')[0]}</div>`;
+          left:calc(50% + 2px);width:calc(${span*100}% + ${span-1}px - 4px);z-index:3">${b.guest.split(' ')[0]}${cleanerInitial ? `<span class="clean-badge" title="Ménage : ${clean.cleaner}">${cleanerInitial}</span>` : ''}</div>`;
       }
       cells += `<td class="${wk?'wknd':''}">${bar}</td>`;
     }
@@ -292,7 +294,7 @@ function vPlanning() {
   </div>
   <div class="small muted" style="margin-top:6px">
     <span class="badge plat b-airbnb">Airbnb</span> <span class="badge plat b-booking">Booking</span>
-    <span class="badge plat b-direct">Direct</span> <span class="badge plat b-abritel">Abritel</span>
+    <span class="badge plat b-direct">Direct</span>
   </div>`;
 }
 
@@ -321,13 +323,9 @@ function aiSuggest(convId) {
 // ================= PLUS (menu) =================
 function vPlus() {
   const items = [
-    ['cleaning', '🧹', 'Ménage & turnover', `${S.cleaning.filter(c=>c.status!=='done').length} à venir`],
-    ['checkio', '🔑', 'Check-in / Check-out', 'Codes, piscine, jacuzzi, arrosage'],
-    ['automsg', '🔔', 'Messages automatiques', `${S.autoMessages.filter(m=>m.enabled).length}/${S.autoMessages.length} actifs`],
-    ['livret', '📗', "Livret d'accueil", 'Guide voyageur digital'],
-    ['guests', '👥', 'Voyageurs', `${S.bookings.length} séjours`],
+    ['cleaning', '🧹', 'Ménages', `${S.cleaning.filter(c=>c.status!=='done').length} à venir`],
+    ['checkio', '🔑', 'Entretien', 'Codes, piscine, jacuzzi, arrosage'],
     ...(isAdmin() ? [
-      ['pricing', '💶', 'Tarification dynamique', 'Recommandations IA'],
       ['stats', '📈', 'Statistiques', 'Revenus & occupation'],
       ['settings', '⚙️', 'Réglages', 'Logements, démo'],
     ] : []),
@@ -468,24 +466,6 @@ function renderAutoTemplate(msgId, b) {
     .replaceAll('{wifiPass}', p.wifiPass || '');
 }
 
-// Messages automatiques
-function sheetAutoMessages() {
-  const row = m => `<div class="card">
-    <div class="row" style="border:0;padding:0 0 8px">
-      <div class="grow title small">${m.label}</div>
-      <label class="small" style="display:flex;align-items:center;gap:6px;cursor:pointer;white-space:nowrap">
-        <input type="checkbox" data-toggle-auto="${m.id}" ${m.enabled?'checked':''}> Actif
-      </label>
-    </div>
-    <textarea data-tpl-auto="${m.id}" rows="3" style="width:100%;padding:10px;border-radius:10px;background:var(--card2);color:var(--txt);border:1px solid var(--line);font:inherit;resize:vertical">${m.template}</textarea>
-  </div>`;
-  openSheet(`
-    <h2>🔔 Messages automatiques</h2>
-    <div class="small muted" style="margin-bottom:10px">Envoyés automatiquement à vos voyageurs. Activez/désactivez et personnalisez le texte de chacun. Variables disponibles : {prenom} {logement} {code} {wifi} {wifiPass}</div>
-    ${S.autoMessages.map(row).join('')}
-  `);
-}
-
 // Ménage
 function sheetCleaning() {
   const list = filtered(S.cleaning);
@@ -506,7 +486,7 @@ function sheetCleaning() {
     </div>`;
   };
   openSheet(`
-    <h2>🧹 Ménage & turnover</h2>
+    <h2>🧹 Ménages</h2>
     <div class="small muted" style="margin-bottom:10px">Une intervention est créée à chaque départ. Choisissez qui s'en charge dans la liste, touchez le statut pour le faire avancer.</div>
     <div class="card">${list.length ? list.map(item).join('') : '<div class="empty small">Rien à nettoyer</div>'}</div>
     <button class="btn ghost block" data-manage-cleaners>⚙️ Gérer la liste des intervenants</button>
@@ -530,45 +510,6 @@ function sheetCleaners() {
   `);
 }
 
-// Livret d'accueil
-function sheetLivret() {
-  if (!S.properties.length) {
-    openSheet(`<h2>📗 Livret d'accueil</h2><div class="empty small">Ajoutez d'abord un logement dans Réglages pour créer son livret d'accueil.</div>`);
-    return;
-  }
-  const p = S.activePid === 'all' ? S.properties[0] : prop(S.activePid);
-  openSheet(`
-    <h2>📗 Livret d'accueil</h2>
-    <div class="chips">${S.properties.map(x => `<button class="chip ${x.id===p.id?'ai':''}" data-livret="${x.id}">${x.emoji} ${x.name}</button>`).join('')}</div>
-    <div class="livret-hero">
-      <div style="font-size:34px">${p.emoji}</div>
-      <h2>${p.name}</h2>
-      <div class="small" style="opacity:.9">${p.address}</div>
-    </div>
-    <div class="info-grid">
-      <div class="info-tile"><div class="ico">📶</div><div class="l">Wifi</div><div class="v">${p.wifi}</div><div class="small muted">${p.wifiPass}</div></div>
-      <div class="info-tile"><div class="ico">🔑</div><div class="l">Code porte</div><div class="v">${p.code}</div></div>
-      <div class="info-tile"><div class="ico">🕓</div><div class="l">Arrivée / Départ</div><div class="v">15h / 11h</div></div>
-      <div class="info-tile"><div class="ico">👥</div><div class="l">Capacité</div><div class="v">${p.cap} voyageurs</div></div>
-    </div>
-    <div class="sec-title">Guide</div>
-    <div class="card"><ul class="list-plain small">
-      <li class="kv"><span class="k">🚪 Arrivée</span><span class="v">Boîte à clés à droite de l'entrée, code ${p.code}</span></li>
-      <li class="kv"><span class="k">🗑️ Poubelles</span><span class="v">Local au RDC, tri sélectif</span></li>
-      <li class="kv"><span class="k">🔥 Chauffage</span><span class="v">Thermostat mural, ne pas dépasser 22°</span></li>
-      <li class="kv"><span class="k">🚭 Règles</span><span class="v">Non-fumeur · pas de fête</span></li>
-      <li class="kv"><span class="k">📞 Urgence</span><span class="v">Hôte : 06 12 34 56 78</span></li>
-    </ul></div>
-    <div class="sec-title">Bonnes adresses ${p.city}</div>
-    <div class="card small"><ul class="list-plain">
-      <li class="kv"><span class="k">🍽️ Restaurant</span><span class="v">Chez Marco — 5 min à pied</span></li>
-      <li class="kv"><span class="k">🥐 Boulangerie</span><span class="v">Le Fournil — au coin de la rue</span></li>
-      <li class="kv"><span class="k">🛒 Supérette</span><span class="v">Ouverte 7j/7 jusqu'à 22h</span></li>
-    </ul></div>
-    <button class="btn block" data-share style="margin-top:8px">🔗 Partager le lien au voyageur</button>
-  `);
-}
-
 // Check-in / Check-out : accès et entretien par logement
 function sheetCheckInOut() {
   if (!S.properties.length) {
@@ -577,7 +518,7 @@ function sheetCheckInOut() {
   }
   const p = S.activePid === 'all' ? S.properties[0] : prop(S.activePid);
   openSheet(`
-    <h2>🔑 Check-in / Check-out</h2>
+    <h2>🔑 Entretien</h2>
     <div class="chips">${S.properties.map(x => `<button class="chip ${x.id===p.id?'ai':''}" data-checkio="${x.id}">${x.emoji} ${x.name}</button>`).join('')}</div>
 
     <div class="sec-title">Accès</div>
@@ -599,59 +540,6 @@ function sheetCheckInOut() {
       <label class="small muted">🌿 Arrosé le</label>
       <input type="date" data-checkio-date="${p.id}|wateredDate" value="${p.wateredDate || ''}" style="width:100%;margin:6px 0 0;padding:11px;border-radius:10px;background:var(--card2);color:var(--txt);border:1px solid var(--line)">
     </div>
-  `);
-}
-
-// Tarification dynamique (amélioration IA)
-function sheetPricing() {
-  if (!isAdmin()) { toast('⛔ Réservé à l\'administrateur'); return; }
-  const props = S.activePid === 'all' ? S.properties : [prop(S.activePid)];
-  const reco = (p, off) => {
-    const dt = d(off), wk = [5,6].includes(dt.getDay());
-    // occupation du jour toutes annonces
-    const occ = S.bookings.some(b => b.pid === p.id && b.checkIn <= D(off) && b.checkOut > D(off));
-    let factor = 1, reason = 'demande standard';
-    if (wk) { factor += .18; reason = 'week-end'; }
-    if (dt.getMonth() === 7) { factor += .25; reason = 'haute saison (août)'; }
-    if (!occ && off < 4) { factor -= .12; reason = 'dernière minute — remplir'; }
-    const price = Math.round(p.base * factor);
-    return { date: D(off), old: p.base, price, reason, up: price >= p.base, booked: occ };
-  };
-  const block = p => {
-    const rows = [1,2,3,4,5,6,7].map(off => {
-      const r = reco(p, off);
-      return `<div class="row">
-        <div class="grow"><div class="small" style="font-weight:600">${fmtDateJ(r.date)}</div>
-          <div class="tiny muted">${r.booked?'réservé':r.reason}</div></div>
-        ${r.booked ? '<span class="badge">réservé</span>' :
-          `<div class="pricebar"><span class="old">${r.old}€</span>
-           <span class="new" style="color:${r.up?'var(--ok)':'var(--warn)'}">${r.price}€</span></div>`}
-      </div>`;
-    }).join('');
-    return `<div class="card"><h2>${p.emoji} ${p.name} <span class="tiny muted">base ${p.base}€</span></h2>${rows}</div>`;
-  };
-  openSheet(`
-    <h2>💶 Tarification dynamique</h2>
-    <div class="small muted" style="margin-bottom:10px">Prix conseillés selon saison, week-end, événements locaux et taux de remplissage. 🤖 Amélioration : intégration météo + agenda événementiel de la ville.</div>
-    ${props.length ? props.map(block).join('') : '<div class="empty small">Ajoutez un logement pour voir les recommandations tarifaires.</div>'}
-    ${props.length ? '<button class="btn block" data-apply-price>✅ Appliquer les prix conseillés</button>' : ''}
-  `);
-}
-
-// Voyageurs
-function sheetGuests() {
-  const list = filtered(S.bookings).slice().sort((a,b)=>b.checkIn.localeCompare(a.checkIn));
-  openSheet(`
-    <h2>👥 Voyageurs</h2>
-    <div class="card" style="padding:4px 14px">${list.length ? list.map(b => {
-      const p = prop(b.pid);
-      return `<div class="row" data-open="${b.id}">
-        <div class="avatar" style="background:${b.avatarColor}">${b.guest[0]}</div>
-        <div class="grow"><div class="title small">${b.guest}</div>
-          <div class="tiny muted">${p.emoji} ${p.name} · ${fmtDate(b.checkIn)}</div></div>
-        ${typeof b.review==='number'?`<span class="badge ok">★ ${b.review}</span>`:b.review==='pending'?'<span class="badge warn">avis ?</span>':`<span class="badge plat ${PLAT[b.plat].cls}">${PLAT[b.plat].label}</span>`}
-      </div>`;
-    }).join('') : '<div class="empty small">Aucun voyageur</div>'}</div>
   `);
 }
 
@@ -677,7 +565,10 @@ function sheetStats() {
       <button class="btn ${statsFilter.mode==='year'?'':'ghost'} sm" data-stats-mode="year">Année</button>
     </div>
     ${statsFilter.mode==='month' ? `<input type="month" data-stats-month value="${statsFilter.month}" style="${FIELD}">` : ''}
-    ${statsFilter.mode==='year' ? `<input type="number" data-stats-year value="${statsFilter.year}" min="2000" max="2100" style="${FIELD}">` : ''}
+    ${statsFilter.mode==='year' ? (() => {
+      const years = Array.from(new Set([...S.bookings.map(b => b.checkIn.slice(0,4)), D(0).slice(0,4)])).sort((a,b)=>b.localeCompare(a));
+      return `<select data-stats-year style="${FIELD}">${years.map(y => `<option value="${y}" ${y===statsFilter.year?'selected':''}>${y}</option>`).join('')}</select>`;
+    })() : ''}
     <div class="kpis">
       <div class="kpi"><div class="v">${money(rev)}</div><div class="l">Revenu total</div></div>
       <div class="kpi"><div class="v">${money(nights ? Math.round(rev/nights) : 0)}</div><div class="l">Prix moyen / nuit</div></div>
@@ -715,7 +606,7 @@ function sheetSettings() {
       <input data-account-password="admin" type="text" value="${S.accounts.admin.password}" style="${FIELD}">
       <label class="small muted">Nom du compte Utilisateur</label>
       <input data-account-name="user" value="${S.accounts.user.name}" style="width:100%;margin:6px 0 0;padding:11px;border-radius:10px;background:var(--card2);color:var(--txt);border:1px solid var(--line)">
-      <div class="tiny muted" style="margin-top:8px">L'Admin a accès à tout (mot de passe requis). L'Utilisateur entre sans mot de passe et voit Tableau, Planning, Ménage, Check-in/Check-out, Livret et Voyageurs, mais pas Tarification, Statistiques ni Réglages.</div>
+      <div class="tiny muted" style="margin-top:8px">L'Admin a accès à tout (mot de passe requis). L'Utilisateur entre sans mot de passe et voit Tableau, Planning, Ménage et Check-in/Check-out, mais pas Statistiques ni Réglages.</div>
     </div>
     <div class="sec-title">Données</div>
     <div class="card">
@@ -846,7 +737,7 @@ function sheetAdd() {
           <input id="f-guests" type="number" value="2" min="1" style="width:100%;margin-top:6px;padding:10px;border-radius:10px;background:var(--card2);color:var(--txt);border:1px solid var(--line)"></div>
         <div style="flex:1"><label class="small muted">Canal</label>
           <select id="f-plat" style="width:100%;margin-top:6px;padding:10px;border-radius:10px;background:var(--card2);color:var(--txt);border:1px solid var(--line)">
-            ${Object.entries(PLAT).map(([k,v])=>`<option value="${k}">${v.label}</option>`).join('')}</select></div>
+            ${Object.entries(PLAT).filter(([k])=>k!=='abritel').map(([k,v])=>`<option value="${k}">${v.label}</option>`).join('')}</select></div>
       </div>
     </div>
     <button class="btn block" data-save-add>Créer la réservation</button>
@@ -900,8 +791,7 @@ function bindCommon(root) {
     const v = +el.dataset.plan; planStart = v === 0 ? 0 : planStart + v; render();
   });
   root.querySelectorAll('[data-more]').forEach(el => el.onclick = () => {
-    ({ cleaning: sheetCleaning, checkio: sheetCheckInOut, automsg: sheetAutoMessages, livret: sheetLivret, pricing: sheetPricing,
-       guests: sheetGuests, stats: sheetStats, settings: sheetSettings }[el.dataset.more])();
+    ({ cleaning: sheetCleaning, checkio: sheetCheckInOut, stats: sheetStats, settings: sheetSettings }[el.dataset.more])();
   });
   // Thread actions
   root.querySelectorAll('[data-send]').forEach(el => el.onclick = () => {
@@ -962,14 +852,6 @@ function bindCommon(root) {
     statsFilter.year = el.value; closeSheet(); sheetStats();
   });
   root.querySelectorAll('[data-manage-cleaners]').forEach(el => el.onclick = () => { closeSheet(); sheetCleaners(); });
-  root.querySelectorAll('[data-toggle-auto]').forEach(el => el.onchange = () => {
-    const m = S.autoMessages.find(x => x.id === el.dataset.toggleAuto);
-    m.enabled = el.checked; save();
-  });
-  root.querySelectorAll('[data-tpl-auto]').forEach(el => el.onblur = () => {
-    const m = S.autoMessages.find(x => x.id === el.dataset.tplAuto);
-    m.template = el.value; save();
-  });
   root.querySelectorAll('[data-add-cleaner]').forEach(el => el.onclick = () => {
     const inp = document.getElementById('f-cleaner');
     const name = inp.value.trim();
@@ -983,11 +865,6 @@ function bindCommon(root) {
     S.cleaning.forEach(c => { if (c.cleaner === name) c.cleaner = ''; });
     save(); closeSheet(); sheetCleaners();
   });
-  root.querySelectorAll('[data-livret]').forEach(el => el.onclick = () => {
-    S.activePid = el.dataset.livret; save(); closeSheet(); sheetLivret();
-  });
-  root.querySelectorAll('[data-share]').forEach(el => el.onclick = () => toast('🔗 Lien du livret copié'));
-  root.querySelectorAll('[data-apply-price]').forEach(el => el.onclick = () => { closeSheet(); toast('✅ Prix conseillés appliqués'); });
   root.querySelectorAll('[data-reset]').forEach(el => el.onclick = () => {
     if (!confirm('Réinitialiser toutes les données de l\'application ?')) return;
     localStorage.removeItem(KEY); load(); closeSheet(); toast('♻️ Application réinitialisée'); render();
