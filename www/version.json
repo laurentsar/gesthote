@@ -1,4 +1,4 @@
 {
-  "version": "1.6.0",
-  "notes": "Le passage d'un ménage à « Fait » demande le nombre de serviettes, de paires de draps et le temps passé. Nouvel écran Plus → Historique des ménages (filtrable par mois/intervenant, tout éditable). Voyants rouges dans Entretien si le chlore piscine (> 7 j) ou l'arrosage (> 3 j) sont en retard."
+  "version": "1.7.0",
+  "notes": "Prix total et commentaire à la création d'une réservation ; fiche réservation entièrement éditable (retire code porte, messages automatiques, bouton conversation). Ménages et Entretien deviennent des onglets principaux. Tableau : ménages du jour à la place des messages. Historique des ménages : totaux et tarifs configurables. Formulaire logement simplifié (retire adresse et wifi)."
 }
