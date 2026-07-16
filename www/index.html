@@ -19,6 +19,21 @@
     window.APP_VERSION = APP_VERSION;
     window.UPDATE_REPO = 'laurentsar/gesthote-releases';
 
+    // Synchronisation cloud (optionnelle) — laissez `null` pour un usage 100%
+    // local (par défaut, aucun changement de comportement). Pour activer la
+    // synchro temps réel entre appareils : collez ici la config de votre
+    // projet Firebase (Console Firebase → Paramètres du projet → Général →
+    // "Vos applications" → app Web → objet firebaseConfig). Ce n'est PAS un
+    // secret : cette config est faite pour être visible côté client, la
+    // sécurité repose sur les règles Firestore + l'authentification.
+    window.FIREBASE_CONFIG = null;
+    // Exemple :
+    // window.FIREBASE_CONFIG = {
+    //   apiKey: "AIza...", authDomain: "gesthote.firebaseapp.com",
+    //   projectId: "gesthote", storageBucket: "gesthote.appspot.com",
+    //   messagingSenderId: "123456789", appId: "1:123456789:web:abcdef"
+    // };
+
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('sw.js').catch(() => {});
       let swRefreshing = false;

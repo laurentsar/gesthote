@@ -50,7 +50,7 @@ function seed() {
     cleaners: [],
     autoMessages: DEFAULT_AUTO_MESSAGES(),
     activePid: 'all',
-    accounts: { admin: { name: 'Admin', password: 'Pialou2023-' }, user: { name: 'Utilisateur' } },
+    accounts: { admin: { name: 'Admin', password: 'Pialou2023-', email: '' }, user: { name: 'Utilisateur' } },
     cleaningPrices: { hourly: 0, towel: 0, sheetPair: 0 },
     v: 2,
   };
@@ -64,13 +64,97 @@ function load() {
   if (!S || S.v !== 2) { S = seed(); save(); }
   if (!S.accounts) { S.accounts = seed().accounts; save(); }
   if (S.accounts.admin.password === undefined) { S.accounts.admin.password = 'Pialou2023-'; save(); }
+  if (S.accounts.admin.email === undefined) { S.accounts.admin.email = ''; save(); }
   if (!S.cleaningPrices) { S.cleaningPrices = seed().cleaningPrices; save(); }
   let changed = false;
   S.cleaning.forEach(c => { if (c.status === 'planned' && c.date <= D(0)) { c.status = 'todo'; changed = true; } });
   if (changed) save();
 }
-function save() { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} }
+function save() { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} pushCloud(); }
 const prop = id => S.properties.find(p => p.id === id);
+
+// ---------- Synchronisation cloud (optionnelle, Firebase) ----------
+// Si window.FIREBASE_CONFIG est renseigné (voir index.html), les données sont
+// synchronisées en temps réel via Firestore entre tous les appareils connectés
+// au même projet Firebase. Sinon (par défaut), l'app reste 100% locale,
+// exactement comme avant — aucun changement de comportement.
+let cloudMode = false;
+let fbDb = null, fbAuth = null, fbUnsub = null, applyingRemoteUpdate = false, cloudPushTimer = null;
+const fb = {};
+
+async function initCloudSync() {
+  const cfg = window.FIREBASE_CONFIG;
+  if (!cfg || !cfg.apiKey) return false;
+  try {
+    const [{ initializeApp }, firestoreMod, authMod] = await Promise.all([
+      import('https://www.gstatic.com/firebasejs/12.16.0/firebase-app.js'),
+      import('https://www.gstatic.com/firebasejs/12.16.0/firebase-firestore.js'),
+      import('https://www.gstatic.com/firebasejs/12.16.0/firebase-auth.js'),
+    ]);
+    const app = initializeApp(cfg);
+    fbDb = firestoreMod.getFirestore(app);
+    fbAuth = authMod.getAuth(app);
+    Object.assign(fb, {
+      doc: firestoreMod.doc, getDoc: firestoreMod.getDoc,
+      onSnapshot: firestoreMod.onSnapshot, setDoc: firestoreMod.setDoc,
+      signInWithEmailAndPassword: authMod.signInWithEmailAndPassword,
+      signOut: authMod.signOut,
+    });
+    cloudMode = true;
+    return true;
+  } catch (e) {
+    console.error('Firebase indisponible, passage en mode local', e);
+    return false;
+  }
+}
+const workspaceDocRef = () => fb.doc(fbDb, 'workspace', 'default');
+
+function subscribeCloud() {
+  if (fbUnsub) fbUnsub();
+  fbUnsub = fb.onSnapshot(workspaceDocRef(), snap => {
+    if (!snap.exists()) { pushCloud(); return; }
+    applyingRemoteUpdate = true;
+    S = snap.data();
+    try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {}
+    render();
+    applyingRemoteUpdate = false;
+  });
+}
+
+function pushCloud() {
+  if (!cloudMode || applyingRemoteUpdate) return;
+  clearTimeout(cloudPushTimer);
+  cloudPushTimer = setTimeout(() => {
+    fb.setDoc(workspaceDocRef(), S).catch(e => console.error('Échec de synchro cloud', e));
+  }, 500);
+}
+
+async function attemptCloudLogin() {
+  const email = document.getElementById('login-email').value.trim();
+  const password = document.getElementById('login-password').value;
+  const msg = document.getElementById('lock-msg');
+  try {
+    const cred = await fb.signInWithEmailAndPassword(fbAuth, email, password);
+    const snap = await fb.getDoc(workspaceDocRef());
+    if (snap.exists()) {
+      S = snap.data();
+      try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {}
+    } else {
+      // Premier login jamais effectué sur ce projet : cet email devient Admin
+      // et initialise le document partagé avec les données locales actuelles.
+      S.accounts.admin.email = email;
+      await fb.setDoc(workspaceDocRef(), S);
+    }
+    currentRole = (email === S.accounts.admin.email) ? 'admin' : 'user';
+    subscribeCloud();
+    render();
+  } catch (e) {
+    if (!msg) return;
+    msg.textContent = e.code === 'auth/network-request-failed'
+      ? '⛔ Pas de connexion internet — réessayez.'
+      : '⛔ Email ou mot de passe incorrect.';
+  }
+}
 const booking = id => S.bookings.find(b => b.id === id);
 
 // ---------- Authentification (mot de passe Admin, accès direct Utilisateur) ----------
@@ -83,14 +167,29 @@ function renderLock() {
   app.innerHTML = `
     <div class="screen" style="display:flex;flex-direction:column;justify-content:center;align-items:center;gap:22px;min-height:calc(100vh - var(--nav-h) - var(--safe-b) - var(--safe-t) - 32px);padding:24px;text-align:center">
       <img src="img/logo-chalets-du-pialou.jpg" alt="" style="width:88px;height:88px;border-radius:20px;object-fit:cover">
-      <div><h1 style="margin:0 0 4px">GestHôte</h1><div class="small muted">Choisissez votre compte</div></div>
+      <div><h1 style="margin:0 0 4px">GestHôte</h1><div class="small muted">${cloudMode ? 'Connectez-vous' : 'Choisissez votre compte'}</div></div>
+      ${cloudMode ? `
+      <div style="width:100%;max-width:320px">
+        <input id="login-email" type="email" placeholder="Email" autofocus
+          style="width:100%;padding:11px;border-radius:10px;background:var(--card2);color:var(--txt);border:1px solid var(--line);text-align:center">
+        <input id="login-password" type="password" placeholder="Mot de passe"
+          style="width:100%;margin-top:10px;padding:11px;border-radius:10px;background:var(--card2);color:var(--txt);border:1px solid var(--line);text-align:center">
+        <button class="btn block" id="cloud-login-go" style="margin-top:10px">Se connecter</button>
+        <div id="lock-msg" class="small muted" style="margin-top:8px"></div>
+      </div>` : `
       <div style="display:flex;flex-direction:column;gap:12px;width:100%;max-width:320px">
         <button class="btn block" data-login="admin">👤 ${S.accounts.admin.name}</button>
         <button class="btn ghost block" data-login="user">👤 ${S.accounts.user.name}</button>
       </div>
-      <div id="lock-form" style="width:100%;max-width:320px"></div>
+      <div id="lock-form" style="width:100%;max-width:320px"></div>`}
     </div>`;
-  app.querySelectorAll('[data-login]').forEach(el => el.onclick = () => attemptLogin(el.dataset.login));
+  if (cloudMode) {
+    const submit = () => attemptCloudLogin();
+    document.getElementById('cloud-login-go').onclick = submit;
+    document.getElementById('login-password').addEventListener('keydown', e => { if (e.key === 'Enter') submit(); });
+  } else {
+    app.querySelectorAll('[data-login]').forEach(el => el.onclick = () => attemptLogin(el.dataset.login));
+  }
 }
 
 function attemptLogin(role) {
@@ -111,7 +210,12 @@ function attemptLogin(role) {
   input.addEventListener('keydown', e => { if (e.key === 'Enter') submit(); });
 }
 
-function lockApp() { currentRole = null; renderLock(); }
+function lockApp() {
+  currentRole = null;
+  if (fbUnsub) { fbUnsub(); fbUnsub = null; }
+  if (cloudMode) fb.signOut(fbAuth).catch(() => {});
+  renderLock();
+}
 
 // ---------- Routeur ----------
 let TAB = 'home';
@@ -704,11 +808,15 @@ function sheetSettings() {
     <div class="card">
       <label class="small muted">Nom du compte Admin</label>
       <input data-account-name="admin" value="${S.accounts.admin.name}" style="${FIELD}">
+      ${cloudMode ? `
+      <div class="tiny muted" style="margin-top:-8px">Synchro cloud active — l'email <b>${S.accounts.admin.email || '(non défini)'}</b> est l'Admin. Tout autre compte créé dans Firebase Authentication est automatiquement Utilisateur.</div>
+      ` : `
       <label class="small muted">Mot de passe Admin</label>
       <input data-account-password="admin" type="text" value="${S.accounts.admin.password}" style="${FIELD}">
+      `}
       <label class="small muted">Nom du compte Utilisateur</label>
       <input data-account-name="user" value="${S.accounts.user.name}" style="width:100%;margin:6px 0 0;padding:11px;border-radius:10px;background:var(--card2);color:var(--txt);border:1px solid var(--line)">
-      <div class="tiny muted" style="margin-top:8px">L'Admin a accès à tout (mot de passe requis). L'Utilisateur entre sans mot de passe et voit Tableau, Planning, Ménage et Check-in/Check-out, mais pas Statistiques ni Réglages.</div>
+      <div class="tiny muted" style="margin-top:8px">L'Admin a accès à tout. L'Utilisateur${cloudMode ? '' : ' entre sans mot de passe et'} voit Tableau, Planning, Ménage et Check-in/Check-out, mais pas Statistiques ni Réglages.</div>
     </div>
     <div class="sec-title">Données</div>
     <div class="card">
@@ -1046,4 +1154,4 @@ function escapeHtml(s) { return s.replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt
 
 // ---------- Boot ----------
 load();
-renderLock();
+initCloudSync().then(renderLock);
