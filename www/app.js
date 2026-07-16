@@ -33,7 +33,7 @@ const DEFAULT_AUTO_MESSAGES = () => [
   { id: 'reservation', label: 'Le jour de la réservation', enabled: true,
     template: "Bonjour {prenom}, votre réservation à {logement} est confirmée ✅. À bientôt !" },
   { id: 'arrival-1', label: "La veille de l'arrivée", enabled: true,
-    template: "Bonjour {prenom}, votre arrivée approche ! Accès autonome dès 15h. Code porte : {code}. Wifi : {wifi} ({wifiPass})." },
+    template: "Bonjour {prenom}, votre arrivée approche ! Accès autonome dès 15h. Code porte : {code}." },
   { id: 'departure-1', label: 'La veille du départ', enabled: true,
     template: "Bonjour {prenom}, nous espérons que votre séjour se passe bien. Petit rappel : départ demain avant 11h, merci de nous laisser les clés à l'endroit convenu." },
   { id: 'departure+2h', label: '2h après le départ', enabled: true,
@@ -51,6 +51,7 @@ function seed() {
     autoMessages: DEFAULT_AUTO_MESSAGES(),
     activePid: 'all',
     accounts: { admin: { name: 'Admin', password: 'Pialou2023-' }, user: { name: 'Utilisateur' } },
+    cleaningPrices: { hourly: 0, towel: 0, sheetPair: 0 },
     v: 2,
   };
 }
@@ -63,6 +64,7 @@ function load() {
   if (!S || S.v !== 2) { S = seed(); save(); }
   if (!S.accounts) { S.accounts = seed().accounts; save(); }
   if (S.accounts.admin.password === undefined) { S.accounts.admin.password = 'Pialou2023-'; save(); }
+  if (!S.cleaningPrices) { S.cleaningPrices = seed().cleaningPrices; save(); }
   let changed = false;
   S.cleaning.forEach(c => { if (c.status === 'planned' && c.date <= D(0)) { c.status = 'todo'; changed = true; } });
   if (changed) save();
@@ -116,7 +118,7 @@ let TAB = 'home';
 const app = document.getElementById('app');
 
 function render() {
-  const views = { home: vHome, plan: vPlanning, plus: vPlus };
+  const views = { home: vHome, plan: vPlanning, cleaning: vCleaning, checkio: vCheckInOut, plus: vPlus };
   const body = (views[TAB] || vHome)();
   app.innerHTML = `<div class="screen">${body}</div>${nav()}`;
   wire();
@@ -127,6 +129,8 @@ function nav() {
   const items = [
     ['home', '📊', 'Tableau'],
     ['plan', '📅', 'Planning'],
+    ['cleaning', '🧹', 'Ménages'],
+    ['checkio', '🔑', 'Entretien'],
     ['plus', '☰', 'Plus'],
   ];
   return `<div class="nav">${items.map(([k, ic, l]) => `
@@ -170,9 +174,9 @@ function vHome() {
   }
   const occRate = cap ? Math.round((occ / cap) * 100) : 0;
 
-  const pendingReviews = bks.filter(b => b.review === 'pending').length;
-  const unread = Object.entries(S.conversations)
-    .filter(([id, c]) => c.unread && (S.activePid === 'all' || booking(id)?.pid === S.activePid)).length;
+  const cleaningToday = filtered(S.cleaning).filter(c => c.date === D(0));
+  const cleaningTodoToday = cleaningToday.filter(c => c.status !== 'done').length;
+  const cleaningDoneToday = cleaningToday.filter(c => c.status === 'done').length;
   const alerts = alertsList();
 
   const bkRow = b => {
@@ -198,8 +202,8 @@ function vHome() {
       <div class="sub up">▲ ${bks.filter(b=>parse(b.checkIn).getMonth()===now.getMonth()).length} réservations</div></div>
     <div class="kpi"><div class="v">${arr.length}·${dep.length}</div><div class="l">Arrivées · Départs (auj.)</div>
       <div class="sub muted">${inhouse.length} voyageurs sur place</div></div>
-    <div class="kpi"><div class="v">${unread + pendingReviews}</div><div class="l">À traiter</div>
-      <div class="sub muted">${unread} msg · ${pendingReviews} avis</div></div>
+    <div class="kpi"><div class="v">${cleaningTodoToday}·${cleaningDoneToday}</div><div class="l">Ménages auj.</div>
+      <div class="sub muted">${cleaningTodoToday} à faire · ${cleaningDoneToday} fait(s)</div></div>
   </div>
 
   ${alerts.length ? `<div class="card" style="border-color:var(--warn)">
@@ -329,8 +333,6 @@ function aiSuggest(convId) {
 // ================= PLUS (menu) =================
 function vPlus() {
   const items = [
-    ['cleaning', '🧹', 'Ménages', `${S.cleaning.filter(c=>c.status!=='done').length} à venir`],
-    ['checkio', '🔑', 'Entretien', 'Codes, piscine, jacuzzi, arrosage'],
     ['cleanhist', '🧺', 'Historique des ménages', `${S.cleaning.filter(c=>c.status==='done').length} enregistré(s)`],
     ...(isAdmin() ? [
       ['stats', '📈', 'Statistiques', 'Revenus & occupation'],
@@ -362,56 +364,46 @@ const closeSheet = () => document.querySelector('.sheet-bg')?.remove();
 
 // Détail réservation + moteur de messages automatiques
 function sheetBooking(id) {
-  const b = booking(id), p = prop(b.pid);
+  const b = booking(id);
   const inHouse = b.checkIn <= D(0) && b.checkOut > D(0);
   const past = b.checkOut <= D(0);
-  const perNight = Math.round(b.amount / b.nights);
-
-  // Moteur d'automatisation : statut de chaque message programmé (réglages dans Plus → Messages automatiques)
-  const now = D(0);
-  const triggerDate = {
-    'reservation': b.checkIn,
-    'arrival-1': D_before(b.checkIn, 1),
-    'departure-1': D_before(b.checkOut, 1),
-    'departure+2h': b.checkOut,
-  };
-  const stepHtml = S.autoMessages.map(m => {
-    const w = triggerDate[m.id];
-    const sent = m.id === 'reservation' || w < now;
-    const next = !sent && w === now;
-    return `<li>
-      <span class="st-ico ${m.enabled && sent?'done':m.enabled && next?'next':''}">${m.enabled && sent?'✓':'🔔'}</span>
-      <div><div class="small" style="font-weight:600">${m.label}</div>
-        <div class="tiny muted">${!m.enabled?'désactivé':sent?'envoyé':next?"aujourd'hui":'programmé '+fmtDate(w)}</div></div>
-    </li>`;
-  }).join('');
-
-  const conv = S.conversations[id];
+  const f = field => `data-edit-booking="${id}" data-field="${field}"`;
   openSheet(`
     <h2>${b.guest}</h2>
     <div style="display:flex;gap:8px;margin-bottom:12px">
       <span class="badge plat ${PLAT[b.plat].cls}">${PLAT[b.plat].label}</span>
       <span class="badge ${past?'':inHouse?'ok':'info'}">${past?'Terminé':inHouse?'Sur place':'À venir'}</span>
     </div>
-    <div class="card" style="background:var(--card2)">
-      <div class="kv"><span class="k">Logement</span><span class="v">${p.emoji} ${p.name}</span></div>
-      <div class="kv"><span class="k">Séjour</span><span class="v">${fmtDateJ(b.checkIn)} → ${fmtDateJ(b.checkOut)}</span></div>
-      <div class="kv"><span class="k">Nuits</span><span class="v">${b.nights} · ${b.guests} voyageurs</span></div>
-      <div class="kv"><span class="k">Montant</span><span class="v">${money(b.amount)} <span class="tiny muted">(${money(perNight)}/nuit)</span></span></div>
-      <div class="kv"><span class="k">Code porte</span><span class="v">🔑 ${p.code}</span></div>
+    <div class="card">
+      <label class="small muted">Logement</label>
+      <select ${f('pid')} style="width:100%;margin:6px 0 12px;padding:10px;border-radius:10px;background:var(--card2);color:var(--txt);border:1px solid var(--line)">
+        ${S.properties.map(p=>`<option value="${p.id}" ${p.id===b.pid?'selected':''}>${p.emoji} ${p.name}</option>`).join('')}
+      </select>
+      <label class="small muted">Nom du voyageur</label>
+      <input ${f('guest')} value="${b.guest}" style="width:100%;margin:6px 0 12px;padding:11px;border-radius:10px;background:var(--card2);color:var(--txt);border:1px solid var(--line)">
+      <div style="display:flex;gap:10px">
+        <div style="flex:1"><label class="small muted">Arrivée</label>
+          <input type="date" ${f('checkIn')} value="${b.checkIn}" style="width:100%;margin-top:6px;padding:10px;border-radius:10px;background:var(--card2);color:var(--txt);border:1px solid var(--line)"></div>
+        <div style="flex:1"><label class="small muted">Départ</label>
+          <input type="date" ${f('checkOut')} value="${b.checkOut}" style="width:100%;margin-top:6px;padding:10px;border-radius:10px;background:var(--card2);color:var(--txt);border:1px solid var(--line)"></div>
+      </div>
+      <div style="display:flex;gap:10px;margin-top:12px">
+        <div style="flex:1"><label class="small muted">Voyageurs</label>
+          <input type="number" min="1" ${f('guests')} value="${b.guests}" style="width:100%;margin-top:6px;padding:10px;border-radius:10px;background:var(--card2);color:var(--txt);border:1px solid var(--line)"></div>
+        <div style="flex:1"><label class="small muted">Canal</label>
+          <select ${f('plat')} style="width:100%;margin-top:6px;padding:10px;border-radius:10px;background:var(--card2);color:var(--txt);border:1px solid var(--line)">
+            ${Object.entries(PLAT).filter(([k])=>k!=='abritel').map(([k,v])=>`<option value="${k}" ${k===b.plat?'selected':''}>${v.label}</option>`).join('')}</select></div>
+      </div>
+      <label class="small muted" style="display:block;margin-top:12px">Prix total (€)</label>
+      <input type="number" inputmode="numeric" min="0" ${f('amount')} value="${b.amount}" style="width:100%;margin:6px 0 0;padding:11px;border-radius:10px;background:var(--card2);color:var(--txt);border:1px solid var(--line)">
+      <label class="small muted" style="display:block;margin-top:12px">Commentaire</label>
+      <textarea ${f('note')} rows="3" style="width:100%;margin:6px 0 0;padding:11px;border-radius:10px;background:var(--card2);color:var(--txt);border:1px solid var(--line);font:inherit;resize:vertical">${b.note || ''}</textarea>
     </div>
 
-    <div class="sec-title" style="margin-top:8px">Messages automatiques</div>
-    <div class="card"><ul class="timeline-steps">${stepHtml}</ul></div>
-
-    <div class="btn-row">
-      <button class="btn ghost block" data-msg="${id}">💬 Ouvrir la conversation</button>
-    </div>
     ${b.review==='pending' ? `<button class="btn block" style="margin-top:8px" data-review="${id}">⭐ Envoyer la demande d'avis</button>` : ''}
     ${!past ? `<button class="btn ghost block" style="margin-top:8px" data-cancel="${id}">Annuler la réservation</button>` : ''}
   `);
 }
-const D_before = (isoStr, n) => iso(new Date(parse(isoStr).getTime() - n * DAY));
 
 // Fil de discussion
 function sheetThread(id) {
@@ -455,7 +447,7 @@ function sendMsg(id, text) {
   closeSheet(); sheetThread(id);
 }
 const TPL = {
-  arrival: b => `Bonjour ${b.guest.split(' ')[0]}, votre arrivée approche ! Accès autonome dès 15h, code porte ${prop(b.pid).code}. Wifi : ${prop(b.pid).wifi}. Bon voyage 🔑`,
+  arrival: b => `Bonjour ${b.guest.split(' ')[0]}, votre arrivée approche ! Accès autonome dès 15h, code porte ${prop(b.pid).code}. Bon voyage 🔑`,
   thanks:  b => `Un grand merci pour votre séjour ${b.guest.split(' ')[0]} ! Ce fut un plaisir de vous accueillir. À très bientôt 🙏`,
   upsell:  b => `Petit plus : arrivée anticipée (+20 €), ménage de mi-séjour (+35 €) ou panier de produits locaux (+25 €) ? Dites-moi ✨`,
 };
@@ -474,7 +466,7 @@ function renderAutoTemplate(msgId, b) {
 }
 
 // Ménage
-function sheetCleaning() {
+function vCleaning() {
   const list = filtered(S.cleaning).filter(c => c.status !== 'done').sort((a,b) => a.date.localeCompare(b.date));
   const item = c => {
     const b = booking(c.bookingId), p = prop(c.pid);
@@ -492,12 +484,12 @@ function sheetCleaning() {
       <button class="badge ${st[0]}" data-clean="${c.id}">${st[1]}</button>
     </div>`;
   };
-  openSheet(`
-    <h2>🧹 Ménages</h2>
-    <div class="small muted" style="margin-bottom:10px">Une intervention est créée à chaque départ. Choisissez qui s'en charge dans la liste, touchez le statut pour le faire avancer.</div>
-    <div class="card">${list.length ? list.map(item).join('') : '<div class="empty small">Rien à nettoyer</div>'}</div>
-    <button class="btn ghost block" data-manage-cleaners>⚙️ Gérer la liste des intervenants</button>
-  `);
+  return `
+  <div class="topbar"><h1>🧹 Ménages</h1></div>
+  ${propSwitch()}
+  <div class="small muted" style="margin-bottom:10px">Une intervention est créée à chaque départ. Choisissez qui s'en charge dans la liste, touchez le statut pour le faire avancer.</div>
+  <div class="card">${list.length ? list.map(item).join('') : '<div class="empty small">Rien à nettoyer</div>'}</div>
+  <button class="btn ghost block" data-manage-cleaners>⚙️ Gérer la liste des intervenants</button>`;
 }
 
 // Confirmation de fin de ménage : quantité de linge à laver
@@ -574,6 +566,31 @@ function sheetCleaningHistory() {
         ${S.cleaners.map(n => `<option value="${n}" ${cleanHistoryFilter.cleaner===n?'selected':''}>${n}</option>`).join('')}
       </select>
     </div>
+    ${(() => {
+      const totalMin = list.reduce((s,c) => s + (c.durationMin||0), 0);
+      const totalTowels = list.reduce((s,c) => s + (c.towels||0), 0);
+      const totalSheets = list.reduce((s,c) => s + (c.sheetPairs||0), 0);
+      const totalHoursDecimal = totalMin / 60;
+      const totalCost = totalHoursDecimal * (S.cleaningPrices.hourly||0) + totalTowels * (S.cleaningPrices.towel||0) + totalSheets * (S.cleaningPrices.sheetPair||0);
+      return `
+      <div class="sec-title">Totaux (filtre actuel)</div>
+      <div class="card">
+        <div class="kv"><span class="k">Temps passé</span><span class="v">${Math.floor(totalMin/60)}h${String(totalMin%60).padStart(2,'0')}</span></div>
+        <div class="kv"><span class="k">Serviettes lavées</span><span class="v">${totalTowels}</span></div>
+        <div class="kv"><span class="k">Paires de draps lavées</span><span class="v">${totalSheets}</span></div>
+        ${isAdmin() ? `<div class="kv"><span class="k">Coût total estimé</span><span class="v">${money(Math.round(totalCost))}</span></div>` : ''}
+      </div>
+      ${isAdmin() ? `
+      <div class="sec-title">Tarifs (Admin)</div>
+      <div class="card">
+        <label class="small muted">Prix de l'heure de ménage (€)</label>
+        <input type="number" inputmode="numeric" min="0" step="0.01" data-price="hourly" value="${S.cleaningPrices.hourly}" style="${FIELD}">
+        <label class="small muted">Prix de la serviette (€)</label>
+        <input type="number" inputmode="numeric" min="0" step="0.01" data-price="towel" value="${S.cleaningPrices.towel}" style="${FIELD}">
+        <label class="small muted">Prix de la paire de draps (€)</label>
+        <input type="number" inputmode="numeric" min="0" step="0.01" data-price="sheetPair" value="${S.cleaningPrices.sheetPair}" style="width:100%;margin:6px 0 0;padding:11px;border-radius:10px;background:var(--card2);color:var(--txt);border:1px solid var(--line)">
+      </div>` : ''}`;
+    })()}
     ${list.length ? list.map(item).join('') : '<div class="empty small">Aucun ménage effectué pour ces filtres</div>'}
   `);
 }
@@ -596,38 +613,36 @@ function sheetCleaners() {
 }
 
 // Check-in / Check-out : accès et entretien par logement
-function sheetCheckInOut() {
+function vCheckInOut() {
   if (!S.properties.length) {
-    openSheet(`<h2>🔑 Entretien</h2><div class="empty small">Ajoutez d'abord un logement dans Réglages pour gérer ses accès et son entretien.</div>`);
-    return;
+    return `<div class="topbar"><h1>🔑 Entretien</h1></div><div class="empty small">Ajoutez d'abord un logement dans Réglages pour gérer ses accès et son entretien.</div>`;
   }
   const p = S.activePid === 'all' ? S.properties[0] : prop(S.activePid);
   const overdue = (dateVal, days) => !dateVal || nightsBetween(dateVal, D(0)) > days;
   const dot = (label, overdueFlag) => overdueFlag ? `${label} <span title="En retard" style="display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--bad);margin-left:4px;vertical-align:middle"></span>` : label;
-  openSheet(`
-    <h2>🔑 Entretien</h2>
-    <div class="chips">${S.properties.map(x => `<button class="chip ${x.id===p.id?'ai':''}" data-checkio="${x.id}">${x.emoji} ${x.name}</button>`).join('')}</div>
+  return `
+  <div class="topbar"><h1>🔑 Entretien</h1></div>
+  <div class="chips">${S.properties.map(x => `<button class="chip ${x.id===p.id?'ai':''}" data-checkio="${x.id}">${x.emoji} ${x.name}</button>`).join('')}</div>
 
-    <div class="sec-title">Accès</div>
-    <div class="card">
-      <label class="small muted">Code boîte à clé</label>
-      <input data-checkio-code="${p.id}" value="${p.code || ''}" style="${FIELD}">
-      <label class="small muted">Commentaire</label>
-      <textarea data-checkio-comment="${p.id}" rows="3" style="width:100%;margin:6px 0 0;padding:11px;border-radius:10px;background:var(--card2);color:var(--txt);border:1px solid var(--line);font:inherit;resize:vertical">${p.checkioComment || ''}</textarea>
-    </div>
+  <div class="sec-title">Accès</div>
+  <div class="card">
+    <label class="small muted">Code boîte à clé</label>
+    <input data-checkio-code="${p.id}" value="${p.code || ''}" style="${FIELD}">
+    <label class="small muted">Commentaire</label>
+    <textarea data-checkio-comment="${p.id}" rows="3" style="width:100%;margin:6px 0 0;padding:11px;border-radius:10px;background:var(--card2);color:var(--txt);border:1px solid var(--line);font:inherit;resize:vertical">${p.checkioComment || ''}</textarea>
+  </div>
 
-    <div class="sec-title">Entretien</div>
-    <div class="card">
-      <label class="small muted">${dot('🧪 Chlore piscine — dernier passage', overdue(p.poolChlorineDate, 7))}</label>
-      <input type="date" data-checkio-date="${p.id}|poolChlorineDate" value="${p.poolChlorineDate || ''}" style="${FIELD}">
-      <label class="small muted">🛁 Jacuzzi vidé le</label>
-      <input type="date" data-checkio-date="${p.id}|jacuzziEmptiedDate" value="${p.jacuzziEmptiedDate || ''}" style="${FIELD}">
-      <label class="small muted">🛁 Jacuzzi rempli le</label>
-      <input type="date" data-checkio-date="${p.id}|jacuzziFilledDate" value="${p.jacuzziFilledDate || ''}" style="${FIELD}">
-      <label class="small muted">${dot('🌿 Arrosé le', overdue(p.wateredDate, 3))}</label>
-      <input type="date" data-checkio-date="${p.id}|wateredDate" value="${p.wateredDate || ''}" style="width:100%;margin:6px 0 0;padding:11px;border-radius:10px;background:var(--card2);color:var(--txt);border:1px solid var(--line)">
-    </div>
-  `);
+  <div class="sec-title">Entretien</div>
+  <div class="card">
+    <label class="small muted">${dot('🧪 Chlore piscine — dernier passage', overdue(p.poolChlorineDate, 7))}</label>
+    <input type="date" data-checkio-date="${p.id}|poolChlorineDate" value="${p.poolChlorineDate || ''}" style="${FIELD}">
+    <label class="small muted">🛁 Jacuzzi vidé le</label>
+    <input type="date" data-checkio-date="${p.id}|jacuzziEmptiedDate" value="${p.jacuzziEmptiedDate || ''}" style="${FIELD}">
+    <label class="small muted">🛁 Jacuzzi rempli le</label>
+    <input type="date" data-checkio-date="${p.id}|jacuzziFilledDate" value="${p.jacuzziFilledDate || ''}" style="${FIELD}">
+    <label class="small muted">${dot('🌿 Arrosé le', overdue(p.wateredDate, 3))}</label>
+    <input type="date" data-checkio-date="${p.id}|wateredDate" value="${p.wateredDate || ''}" style="width:100%;margin:6px 0 0;padding:11px;border-radius:10px;background:var(--card2);color:var(--txt);border:1px solid var(--line)">
+  </div>`;
 }
 
 // Statistiques
@@ -681,7 +696,7 @@ function sheetSettings() {
     <div class="sec-title">Logements</div>
     <div class="card">${S.properties.length ? S.properties.map(p => `<div class="row" data-edit-prop="${p.id}" style="cursor:pointer">
       <img src="img/logo-chalets-du-pialou.jpg" alt="" class="avatar" style="object-fit:cover">
-      <div class="grow"><div class="title small">${p.name}</div><div class="tiny muted">${p.city || 'Ville non renseignée'} · base ${p.base}€</div></div>
+      <div class="grow"><div class="title small">${p.name}</div><div class="tiny muted">${p.cap} voyageurs · base ${p.base}€</div></div>
       <span class="dim">›</span>
     </div>`).join('') : '<div class="empty small">Aucun logement — ajoutez le premier ci-dessous</div>'}</div>
     <button class="btn ghost block" data-add-prop>+ Ajouter un logement</button>
@@ -730,14 +745,6 @@ function sheetPropertyForm(id) {
       </div>
     </div>
 
-    <div class="sec-title">Adresse</div>
-    <div class="card">
-      <label class="small muted">Ville</label>
-      <input id="f-city" value="${p ? p.city : ''}" style="${FIELD}">
-      <label class="small muted">Adresse</label>
-      <input id="f-address" value="${p ? p.address : ''}" style="width:100%;margin:6px 0 0;padding:11px;border-radius:10px;background:var(--card2);color:var(--txt);border:1px solid var(--line)">
-    </div>
-
     <div class="sec-title">Capacité &amp; tarif</div>
     <div class="card">
       <div style="display:flex;gap:10px">
@@ -750,10 +757,6 @@ function sheetPropertyForm(id) {
 
     <div class="sec-title">Accès voyageur</div>
     <div class="card">
-      <label class="small muted">Wifi (nom du réseau)</label>
-      <input id="f-wifi" value="${p ? p.wifi : ''}" style="${FIELD}">
-      <label class="small muted">Mot de passe wifi</label>
-      <input id="f-wifiPass" value="${p ? p.wifiPass : ''}" style="${FIELD}">
       <label class="small muted">Code porte</label>
       <input id="f-code" value="${p ? p.code : ''}" style="width:100%;margin:6px 0 0;padding:11px;border-radius:10px;background:var(--card2);color:var(--txt);border:1px solid var(--line)">
     </div>
@@ -772,12 +775,8 @@ function saveProperty(sg, id) {
     name,
     emoji: sg.querySelector('#f-emoji').value.trim() || '🏠',
     color: sg.querySelector('#f-color').value,
-    city: sg.querySelector('#f-city').value.trim(),
-    address: sg.querySelector('#f-address').value.trim(),
     cap: +sg.querySelector('#f-cap').value || 1,
     base: +sg.querySelector('#f-base').value || 0,
-    wifi: sg.querySelector('#f-wifi').value.trim(),
-    wifiPass: sg.querySelector('#f-wifiPass').value.trim(),
     code: sg.querySelector('#f-code').value.trim(),
   };
   if (id) {
@@ -826,6 +825,10 @@ function sheetAdd() {
           <select id="f-plat" style="width:100%;margin-top:6px;padding:10px;border-radius:10px;background:var(--card2);color:var(--txt);border:1px solid var(--line)">
             ${Object.entries(PLAT).filter(([k])=>k!=='abritel').map(([k,v])=>`<option value="${k}">${v.label}</option>`).join('')}</select></div>
       </div>
+      <label class="small muted" style="display:block;margin-top:12px">Prix total (€)</label>
+      <input id="f-amount" type="number" inputmode="numeric" min="0" placeholder="Calculé automatiquement si vide" style="width:100%;margin:6px 0 0;padding:11px;border-radius:10px;background:var(--card2);color:var(--txt);border:1px solid var(--line)">
+      <label class="small muted" style="display:block;margin-top:12px">Commentaire</label>
+      <textarea id="f-note" rows="3" style="width:100%;margin:6px 0 0;padding:11px;border-radius:10px;background:var(--card2);color:var(--txt);border:1px solid var(--line);font:inherit;resize:vertical"></textarea>
     </div>
     <button class="btn block" data-save-add>Créer la réservation</button>
   `);
@@ -837,13 +840,15 @@ function saveAdd(sg) {
   const nights = Math.max(1, nightsBetween(inIso, outIso));
   const guests = +sg.querySelector('#f-guests').value || 2;
   const plat = sg.querySelector('#f-plat').value;
+  const amountRaw = sg.querySelector('#f-amount').value;
+  const note = sg.querySelector('#f-note').value.trim();
   // anti double-réservation
   const clash = S.bookings.some(b => b.pid === pid && inIso < b.checkOut && outIso > b.checkIn);
   if (clash) { toast('⛔ Conflit : dates déjà réservées sur ce logement'); return; }
   const p = prop(pid);
   const id = 'b' + Date.now().toString(36);
   const newBooking = { id, pid, plat, guest: g, checkIn: inIso, checkOut: outIso, nights, guests,
-    amount: p.base * nights, avatarColor: '#14b8a6', review: null, note: '' };
+    amount: amountRaw !== '' ? +amountRaw || 0 : p.base * nights, avatarColor: '#14b8a6', review: null, note };
   S.bookings.push(newBooking);
   S.cleaning.push({ id: 'c' + id, pid, date: outIso, bookingId: id, cleaner: '', comment: '',
     status: outIso < D(0) ? 'done' : outIso === D(0) ? 'todo' : 'planned' });
@@ -878,7 +883,7 @@ function bindCommon(root) {
     const v = +el.dataset.plan; planStart = v === 0 ? 0 : planStart + v; render();
   });
   root.querySelectorAll('[data-more]').forEach(el => el.onclick = () => {
-    ({ cleaning: sheetCleaning, checkio: sheetCheckInOut, cleanhist: sheetCleaningHistory, stats: sheetStats, settings: sheetSettings }[el.dataset.more])();
+    ({ cleanhist: sheetCleaningHistory, stats: sheetStats, settings: sheetSettings }[el.dataset.more])();
   });
   // Thread actions
   root.querySelectorAll('[data-send]').forEach(el => el.onclick = () => {
@@ -905,11 +910,11 @@ function bindCommon(root) {
   });
   root.querySelectorAll('[data-clean]').forEach(el => el.onclick = () => {
     const c = S.cleaning.find(x => x.id === el.dataset.clean);
-    if (c.status === 'todo') { closeSheet(); sheetCleanDone(c.id); return; }
+    if (c.status === 'todo') { sheetCleanDone(c.id); return; }
     c.status = c.status === 'planned' ? 'todo' : 'planned';
-    save(); closeSheet(); sheetCleaning();
+    save(); render();
   });
-  root.querySelectorAll('[data-clean-done-cancel]').forEach(el => el.onclick = () => { closeSheet(); sheetCleaning(); });
+  root.querySelectorAll('[data-clean-done-cancel]').forEach(el => el.onclick = () => { closeSheet(); render(); });
   root.querySelectorAll('[data-clean-done-confirm]').forEach(el => el.onclick = () => {
     const c = S.cleaning.find(x => x.id === el.dataset.cleanDoneConfirm);
     const sg = document.querySelector('.sheet-bg');
@@ -919,7 +924,7 @@ function bindCommon(root) {
     c.status = 'done';
     save(); closeSheet();
     toast(`✅ Ménage terminé — ${c.towels} serviette(s), ${c.sheetPairs} paire(s) de draps, ${Math.floor(c.durationMin/60)}h${String(c.durationMin%60).padStart(2,'0')}`);
-    sheetCleaning();
+    render();
   });
   root.querySelectorAll('[data-clean-assign]').forEach(el => el.onchange = () => {
     const c = S.cleaning.find(x => x.id === el.dataset.cleanAssign);
@@ -951,12 +956,15 @@ function bindCommon(root) {
   root.querySelectorAll('[data-hist-filter-cleaner]').forEach(el => el.onchange = () => {
     cleanHistoryFilter.cleaner = el.value; closeSheet(); sheetCleaningHistory();
   });
+  root.querySelectorAll('[data-price]').forEach(el => el.onblur = () => {
+    S.cleaningPrices[el.dataset.price] = +el.value || 0; save(); closeSheet(); sheetCleaningHistory();
+  });
   root.querySelectorAll('[data-clean-comment]').forEach(el => el.onblur = () => {
     const c = S.cleaning.find(x => x.id === el.dataset.cleanComment);
     c.comment = el.value; save();
   });
   root.querySelectorAll('[data-checkio]').forEach(el => el.onclick = () => {
-    S.activePid = el.dataset.checkio; save(); closeSheet(); sheetCheckInOut();
+    S.activePid = el.dataset.checkio; save(); render();
   });
   root.querySelectorAll('[data-checkio-code]').forEach(el => el.onblur = () => {
     prop(el.dataset.checkioCode).code = el.value.trim(); save();
@@ -967,6 +975,27 @@ function bindCommon(root) {
   root.querySelectorAll('[data-checkio-date]').forEach(el => el.onchange = () => {
     const [pid, field] = el.dataset.checkioDate.split('|');
     prop(pid)[field] = el.value; save();
+  });
+  root.querySelectorAll('[data-edit-booking]').forEach(el => el.onchange = () => {
+    const id = el.dataset.editBooking, field = el.dataset.field;
+    const b = booking(id);
+    const numericFields = ['guests', 'amount'];
+    const dateOrPidFields = ['checkIn', 'checkOut', 'pid'];
+    const prevPid = b.pid, prevIn = b.checkIn, prevOut = b.checkOut;
+    b[field] = numericFields.includes(field) ? (+el.value || 0) : el.value;
+    if (dateOrPidFields.includes(field)) {
+      const clash = S.bookings.some(x => x.id !== id && x.pid === b.pid && b.checkIn < x.checkOut && b.checkOut > x.checkIn);
+      if (clash) {
+        toast('⛔ Conflit : dates déjà réservées sur ce logement');
+        b.pid = prevPid; b.checkIn = prevIn; b.checkOut = prevOut;
+        closeSheet(); sheetBooking(id); return;
+      }
+      b.nights = Math.max(1, nightsBetween(b.checkIn, b.checkOut));
+      const c = S.cleaning.find(x => x.bookingId === id);
+      if (c) { c.pid = b.pid; c.date = b.checkOut; }
+      save(); closeSheet(); sheetBooking(id); return;
+    }
+    save();
   });
   root.querySelectorAll('[data-stats-mode]').forEach(el => el.onclick = () => {
     statsFilter.mode = el.dataset.statsMode; closeSheet(); sheetStats();
