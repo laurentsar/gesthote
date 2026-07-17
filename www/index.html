@@ -26,13 +26,14 @@
     // "Vos applications" → app Web → objet firebaseConfig). Ce n'est PAS un
     // secret : cette config est faite pour être visible côté client, la
     // sécurité repose sur les règles Firestore + l'authentification.
-    window.FIREBASE_CONFIG = null;
-    // Exemple :
-    // window.FIREBASE_CONFIG = {
-    //   apiKey: "AIza...", authDomain: "gesthote.firebaseapp.com",
-    //   projectId: "gesthote", storageBucket: "gesthote.appspot.com",
-    //   messagingSenderId: "123456789", appId: "1:123456789:web:abcdef"
-    // };
+    window.FIREBASE_CONFIG = {
+      apiKey: "AIzaSyAzTVhktmk2H_dbh8PN3JBLz1Wnzox2C6c",
+      authDomain: "gesthote-4fab3.firebaseapp.com",
+      projectId: "gesthote-4fab3",
+      storageBucket: "gesthote-4fab3.firebasestorage.app",
+      messagingSenderId: "302635673844",
+      appId: "1:302635673844:web:424faea91e72bfe29216a1"
+    };
 
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('sw.js').catch(() => {});
