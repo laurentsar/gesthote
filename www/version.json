@@ -1,4 +1,4 @@
 {
-  "version": "1.8.2",
-  "notes": "Corrige un message d'erreur trompeur à la connexion cloud : un problème d'accès à Firestore (ex. règles de sécurité non publiées) affichait à tort « Email ou mot de passe incorrect ». Le message indique désormais la vraie cause."
+  "version": "1.8.3",
+  "notes": "Corrige l'erreur « accès à la base refusé (unavailable) » qui pouvait empêcher la connexion cloud sur l'application Android : Firestore est désormais initialisé en mode long-polling, compatible avec la WebView Android."
 }
