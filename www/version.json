@@ -1,4 +1,4 @@
 {
-  "version": "1.7.0",
-  "notes": "Prix total et commentaire à la création d'une réservation ; fiche réservation entièrement éditable (retire code porte, messages automatiques, bouton conversation). Ménages et Entretien deviennent des onglets principaux. Tableau : ménages du jour à la place des messages. Historique des ménages : totaux et tarifs configurables. Formulaire logement simplifié (retire adresse et wifi)."
+  "version": "1.8.0",
+  "notes": "Synchronisation cloud optionnelle via Firebase (désactivée par défaut). Corrige plusieurs bugs du planning (nom du logement, séjours en cours, jour courant surligné, filtre logement retiré). Ajoute le suivi tondeuse dans Entretien. Restreint le compte Utilisateur (pas de Tableau, pas d'ajout/ouverture de réservation, ménage en lecture seule)."
 }
