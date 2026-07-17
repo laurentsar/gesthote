@@ -50,7 +50,7 @@ function seed() {
     cleaners: [],
     autoMessages: DEFAULT_AUTO_MESSAGES(),
     activePid: 'all',
-    accounts: { admin: { name: 'Admin', password: 'Pialou2023-' }, user: { name: 'Utilisateur' } },
+    accounts: { admin: { name: 'Admin', password: 'Pialou2023-', email: '' }, user: { name: 'Utilisateur' } },
     cleaningPrices: { hourly: 0, towel: 0, sheetPair: 0 },
     v: 2,
   };
@@ -64,13 +64,97 @@ function load() {
   if (!S || S.v !== 2) { S = seed(); save(); }
   if (!S.accounts) { S.accounts = seed().accounts; save(); }
   if (S.accounts.admin.password === undefined) { S.accounts.admin.password = 'Pialou2023-'; save(); }
+  if (S.accounts.admin.email === undefined) { S.accounts.admin.email = ''; save(); }
   if (!S.cleaningPrices) { S.cleaningPrices = seed().cleaningPrices; save(); }
   let changed = false;
   S.cleaning.forEach(c => { if (c.status === 'planned' && c.date <= D(0)) { c.status = 'todo'; changed = true; } });
   if (changed) save();
 }
-function save() { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} }
+function save() { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} pushCloud(); }
 const prop = id => S.properties.find(p => p.id === id);
+
+// ---------- Synchronisation cloud (optionnelle, Firebase) ----------
+// Si window.FIREBASE_CONFIG est renseigné (voir index.html), les données sont
+// synchronisées en temps réel via Firestore entre tous les appareils connectés
+// au même projet Firebase. Sinon (par défaut), l'app reste 100% locale,
+// exactement comme avant — aucun changement de comportement.
+let cloudMode = false;
+let fbDb = null, fbAuth = null, fbUnsub = null, applyingRemoteUpdate = false, cloudPushTimer = null;
+const fb = {};
+
+async function initCloudSync() {
+  const cfg = window.FIREBASE_CONFIG;
+  if (!cfg || !cfg.apiKey) return false;
+  try {
+    const [{ initializeApp }, firestoreMod, authMod] = await Promise.all([
+      import('https://www.gstatic.com/firebasejs/12.16.0/firebase-app.js'),
+      import('https://www.gstatic.com/firebasejs/12.16.0/firebase-firestore.js'),
+      import('https://www.gstatic.com/firebasejs/12.16.0/firebase-auth.js'),
+    ]);
+    const app = initializeApp(cfg);
+    fbDb = firestoreMod.getFirestore(app);
+    fbAuth = authMod.getAuth(app);
+    Object.assign(fb, {
+      doc: firestoreMod.doc, getDoc: firestoreMod.getDoc,
+      onSnapshot: firestoreMod.onSnapshot, setDoc: firestoreMod.setDoc,
+      signInWithEmailAndPassword: authMod.signInWithEmailAndPassword,
+      signOut: authMod.signOut,
+    });
+    cloudMode = true;
+    return true;
+  } catch (e) {
+    console.error('Firebase indisponible, passage en mode local', e);
+    return false;
+  }
+}
+const workspaceDocRef = () => fb.doc(fbDb, 'workspace', 'default');
+
+function subscribeCloud() {
+  if (fbUnsub) fbUnsub();
+  fbUnsub = fb.onSnapshot(workspaceDocRef(), snap => {
+    if (!snap.exists()) { pushCloud(); return; }
+    applyingRemoteUpdate = true;
+    S = snap.data();
+    try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {}
+    render();
+    applyingRemoteUpdate = false;
+  });
+}
+
+function pushCloud() {
+  if (!cloudMode || applyingRemoteUpdate) return;
+  clearTimeout(cloudPushTimer);
+  cloudPushTimer = setTimeout(() => {
+    fb.setDoc(workspaceDocRef(), S).catch(e => console.error('Échec de synchro cloud', e));
+  }, 500);
+}
+
+async function attemptCloudLogin() {
+  const email = document.getElementById('login-email').value.trim();
+  const password = document.getElementById('login-password').value;
+  const msg = document.getElementById('lock-msg');
+  try {
+    const cred = await fb.signInWithEmailAndPassword(fbAuth, email, password);
+    const snap = await fb.getDoc(workspaceDocRef());
+    if (snap.exists()) {
+      S = snap.data();
+      try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {}
+    } else {
+      // Premier login jamais effectué sur ce projet : cet email devient Admin
+      // et initialise le document partagé avec les données locales actuelles.
+      S.accounts.admin.email = email;
+      await fb.setDoc(workspaceDocRef(), S);
+    }
+    currentRole = (email === S.accounts.admin.email) ? 'admin' : 'user';
+    subscribeCloud();
+    render();
+  } catch (e) {
+    if (!msg) return;
+    msg.textContent = e.code === 'auth/network-request-failed'
+      ? '⛔ Pas de connexion internet — réessayez.'
+      : '⛔ Email ou mot de passe incorrect.';
+  }
+}
 const booking = id => S.bookings.find(b => b.id === id);
 
 // ---------- Authentification (mot de passe Admin, accès direct Utilisateur) ----------
@@ -83,14 +167,29 @@ function renderLock() {
   app.innerHTML = `
     <div class="screen" style="display:flex;flex-direction:column;justify-content:center;align-items:center;gap:22px;min-height:calc(100vh - var(--nav-h) - var(--safe-b) - var(--safe-t) - 32px);padding:24px;text-align:center">
       <img src="img/logo-chalets-du-pialou.jpg" alt="" style="width:88px;height:88px;border-radius:20px;object-fit:cover">
-      <div><h1 style="margin:0 0 4px">GestHôte</h1><div class="small muted">Choisissez votre compte</div></div>
+      <div><h1 style="margin:0 0 4px">GestHôte</h1><div class="small muted">${cloudMode ? 'Connectez-vous' : 'Choisissez votre compte'}</div></div>
+      ${cloudMode ? `
+      <div style="width:100%;max-width:320px">
+        <input id="login-email" type="email" placeholder="Email" autofocus
+          style="width:100%;padding:11px;border-radius:10px;background:var(--card2);color:var(--txt);border:1px solid var(--line);text-align:center">
+        <input id="login-password" type="password" placeholder="Mot de passe"
+          style="width:100%;margin-top:10px;padding:11px;border-radius:10px;background:var(--card2);color:var(--txt);border:1px solid var(--line);text-align:center">
+        <button class="btn block" id="cloud-login-go" style="margin-top:10px">Se connecter</button>
+        <div id="lock-msg" class="small muted" style="margin-top:8px"></div>
+      </div>` : `
       <div style="display:flex;flex-direction:column;gap:12px;width:100%;max-width:320px">
         <button class="btn block" data-login="admin">👤 ${S.accounts.admin.name}</button>
         <button class="btn ghost block" data-login="user">👤 ${S.accounts.user.name}</button>
       </div>
-      <div id="lock-form" style="width:100%;max-width:320px"></div>
+      <div id="lock-form" style="width:100%;max-width:320px"></div>`}
     </div>`;
-  app.querySelectorAll('[data-login]').forEach(el => el.onclick = () => attemptLogin(el.dataset.login));
+  if (cloudMode) {
+    const submit = () => attemptCloudLogin();
+    document.getElementById('cloud-login-go').onclick = submit;
+    document.getElementById('login-password').addEventListener('keydown', e => { if (e.key === 'Enter') submit(); });
+  } else {
+    app.querySelectorAll('[data-login]').forEach(el => el.onclick = () => attemptLogin(el.dataset.login));
+  }
 }
 
 function attemptLogin(role) {
@@ -111,13 +210,19 @@ function attemptLogin(role) {
   input.addEventListener('keydown', e => { if (e.key === 'Enter') submit(); });
 }
 
-function lockApp() { currentRole = null; renderLock(); }
+function lockApp() {
+  currentRole = null;
+  if (fbUnsub) { fbUnsub(); fbUnsub = null; }
+  if (cloudMode) fb.signOut(fbAuth).catch(() => {});
+  renderLock();
+}
 
 // ---------- Routeur ----------
 let TAB = 'home';
 const app = document.getElementById('app');
 
 function render() {
+  if (TAB === 'home' && !isAdmin()) TAB = 'cleaning';
   const views = { home: vHome, plan: vPlanning, cleaning: vCleaning, checkio: vCheckInOut, plus: vPlus };
   const body = (views[TAB] || vHome)();
   app.innerHTML = `<div class="screen">${body}</div>${nav()}`;
@@ -127,7 +232,7 @@ function render() {
 
 function nav() {
   const items = [
-    ['home', '📊', 'Tableau'],
+    ...(isAdmin() ? [['home', '📊', 'Tableau']] : []),
     ['plan', '📅', 'Planning'],
     ['cleaning', '🧹', 'Ménages'],
     ['checkio', '🔑', 'Entretien'],
@@ -257,30 +362,39 @@ function alertsList() {
 // ================= PLANNING (calendrier multi-logements) =================
 let planStart = 0;
 function vPlanning() {
-  const props = S.activePid === 'all' ? S.properties : [prop(S.activePid)];
+  const props = S.properties;
   const DAYS = 21;
+  const barColor = plat => PLAT[plat].cls==='b-airbnb'?'#ff5a5f':PLAT[plat].cls==='b-booking'?'#3b82f6':PLAT[plat].cls==='b-direct'?'#a855f7':'#f59e0b';
+  const barHtml = (b, span, leftOffset) => {
+    const clean = S.cleaning.find(c => c.bookingId === b.id);
+    const cleanerInitial = clean && clean.cleaner ? clean.cleaner.trim()[0].toUpperCase() : '';
+    return `<div class="res-bar" ${isAdmin() ? `data-open="${b.id}"` : ''}
+      style="background:${barColor(b.plat)};
+      left:${leftOffset};width:calc(${span*100}% + ${span-1}px - 4px);z-index:3">${b.guest.split(' ')[0]}${cleanerInitial ? `<span class="clean-badge" title="Ménage : ${clean.cleaner}">${cleanerInitial}</span>` : ''}</div>`;
+  };
   let head = '';
   for (let i = 0; i < DAYS; i++) {
     const dt = d(planStart + i), wk = dt.getDay() === 0 || dt.getDay() === 6;
-    head += `<th class="${wk?'wknd':''}"><div class="tl-day">${JOURS[dt.getDay()][0].toUpperCase()}<b>${dt.getDate()}</b></div></th>`;
+    const isToday = D(planStart + i) === D(0);
+    head += `<th class="${wk?'wknd':''}${isToday?' today':''}"><div class="tl-day">${JOURS[dt.getDay()][0].toUpperCase()}<b>${dt.getDate()}</b></div></th>`;
   }
   const rows = props.map(p => {
     let cells = '';
+    // Séjour déjà en cours à l'ouverture de la période affichée (arrivée avant le 1er jour visible)
+    const ongoing = S.bookings.find(x => x.pid === p.id && x.checkIn < D(planStart) && x.checkOut > D(planStart));
     for (let i = 0; i < DAYS; i++) {
       const dayIso = D(planStart + i);
       const wk = [0,6].includes(d(planStart+i).getDay());
-      // barre de réservation démarrant ce jour
-      const b = S.bookings.find(x => x.pid === p.id && x.checkIn === dayIso);
+      const isToday = dayIso === D(0);
       let bar = '';
-      if (b) {
-        const span = Math.min(b.nights, DAYS - i);
-        const clean = S.cleaning.find(c => c.bookingId === b.id);
-        const cleanerInitial = clean && clean.cleaner ? clean.cleaner.trim()[0].toUpperCase() : '';
-        bar = `<div class="res-bar" data-open="${b.id}"
-          style="background:${PLAT[b.plat].cls==='b-airbnb'?'#ff5a5f':PLAT[b.plat].cls==='b-booking'?'#3b82f6':PLAT[b.plat].cls==='b-direct'?'#a855f7':'#f59e0b'};
-          left:calc(50% + 2px);width:calc(${span*100}% + ${span-1}px - 4px);z-index:3">${b.guest.split(' ')[0]}${cleanerInitial ? `<span class="clean-badge" title="Ménage : ${clean.cleaner}">${cleanerInitial}</span>` : ''}</div>`;
+      if (i === 0 && ongoing) {
+        const span = Math.min(nightsBetween(D(planStart), ongoing.checkOut), DAYS);
+        bar = barHtml(ongoing, span, '2px');
+      } else {
+        const b = S.bookings.find(x => x.pid === p.id && x.checkIn === dayIso);
+        if (b) bar = barHtml(b, Math.min(b.nights, DAYS - i), 'calc(50% + 2px)');
       }
-      cells += `<td class="${wk?'wknd':''}">${bar}</td>`;
+      cells += `<td class="${wk?'wknd':''}${isToday?' today':''}">${bar}</td>`;
     }
     return `<tr><th class="prop-cell">${p.emoji} ${p.name}</th>${cells}</tr>`;
   }).join('');
@@ -288,8 +402,7 @@ function vPlanning() {
   const range = `${fmtDate(D(planStart))} – ${fmtDate(D(planStart + DAYS - 1))}`;
   return `
   <div class="topbar"><h1>Planning</h1><span class="spacer"></span>
-    <button class="btn sm" data-add>+ Résa</button></div>
-  ${propSwitch()}
+    ${isAdmin() ? `<button class="btn sm" data-add>+ Résa</button>` : ''}</div>
   <div class="btn-row" style="margin-bottom:10px">
     <button class="btn ghost sm" data-plan="-7">← Semaine</button>
     <button class="btn ghost sm" data-plan="0">Aujourd'hui</button>
@@ -364,6 +477,7 @@ const closeSheet = () => document.querySelector('.sheet-bg')?.remove();
 
 // Détail réservation + moteur de messages automatiques
 function sheetBooking(id) {
+  if (!isAdmin()) { toast('⛔ Réservé à l\'administrateur'); return; }
   const b = booking(id);
   const inHouse = b.checkIn <= D(0) && b.checkOut > D(0);
   const past = b.checkOut <= D(0);
@@ -476,11 +590,11 @@ function vCleaning() {
       <div class="avatar" style="background:${p.color}">${p.emoji}</div>
       <div class="grow"><div class="title small">${p.name}</div>
         <div class="tiny muted">${fmtDateJ(c.date)}${nextIn?` · arrivée ${nextIn.guest.split(' ')[0]} même jour`:''}</div>
-        <select data-clean-assign="${c.id}" style="margin-top:6px;padding:6px 8px;border-radius:8px;background:var(--card2);color:var(--txt);border:1px solid var(--line);font-size:12px">
+        <select data-clean-assign="${c.id}" ${isAdmin() ? '' : 'disabled'} style="margin-top:6px;padding:6px 8px;border-radius:8px;background:var(--card2);color:var(--txt);border:1px solid var(--line);font-size:12px">
           <option value="">— Qui fait le ménage ? —</option>
           ${S.cleaners.map(name => `<option value="${name}" ${c.cleaner===name?'selected':''}>${name}</option>`).join('')}
         </select>
-        <textarea data-clean-comment="${c.id}" placeholder="Commentaire (ex. clé cachée, linge à racheter, panne signalée…)" rows="2" style="margin-top:6px;width:100%;padding:8px;border-radius:8px;background:var(--card2);color:var(--txt);border:1px solid var(--line);font:inherit;font-size:12px;resize:vertical">${c.comment || ''}</textarea></div>
+        <textarea data-clean-comment="${c.id}" ${isAdmin() ? '' : 'disabled'} placeholder="Commentaire (ex. clé cachée, linge à racheter, panne signalée…)" rows="2" style="margin-top:6px;width:100%;padding:8px;border-radius:8px;background:var(--card2);color:var(--txt);border:1px solid var(--line);font:inherit;font-size:12px;resize:vertical">${c.comment || ''}</textarea></div>
       <button class="badge ${st[0]}" data-clean="${c.id}">${st[1]}</button>
     </div>`;
   };
@@ -641,7 +755,9 @@ function vCheckInOut() {
     <label class="small muted">🛁 Jacuzzi rempli le</label>
     <input type="date" data-checkio-date="${p.id}|jacuzziFilledDate" value="${p.jacuzziFilledDate || ''}" style="${FIELD}">
     <label class="small muted">${dot('🌿 Arrosé le', overdue(p.wateredDate, 3))}</label>
-    <input type="date" data-checkio-date="${p.id}|wateredDate" value="${p.wateredDate || ''}" style="width:100%;margin:6px 0 0;padding:11px;border-radius:10px;background:var(--card2);color:var(--txt);border:1px solid var(--line)">
+    <input type="date" data-checkio-date="${p.id}|wateredDate" value="${p.wateredDate || ''}" style="${FIELD}">
+    <label class="small muted">${dot('🚜 Tondeuse fait le', overdue(p.mowedDate, 10))}</label>
+    <input type="date" data-checkio-date="${p.id}|mowedDate" value="${p.mowedDate || ''}" style="width:100%;margin:6px 0 0;padding:11px;border-radius:10px;background:var(--card2);color:var(--txt);border:1px solid var(--line)">
   </div>`;
 }
 
@@ -704,11 +820,15 @@ function sheetSettings() {
     <div class="card">
       <label class="small muted">Nom du compte Admin</label>
       <input data-account-name="admin" value="${S.accounts.admin.name}" style="${FIELD}">
+      ${cloudMode ? `
+      <div class="tiny muted" style="margin-top:-8px">Synchro cloud active — l'email <b>${S.accounts.admin.email || '(non défini)'}</b> est l'Admin. Tout autre compte créé dans Firebase Authentication est automatiquement Utilisateur.</div>
+      ` : `
       <label class="small muted">Mot de passe Admin</label>
       <input data-account-password="admin" type="text" value="${S.accounts.admin.password}" style="${FIELD}">
+      `}
       <label class="small muted">Nom du compte Utilisateur</label>
       <input data-account-name="user" value="${S.accounts.user.name}" style="width:100%;margin:6px 0 0;padding:11px;border-radius:10px;background:var(--card2);color:var(--txt);border:1px solid var(--line)">
-      <div class="tiny muted" style="margin-top:8px">L'Admin a accès à tout (mot de passe requis). L'Utilisateur entre sans mot de passe et voit Tableau, Planning, Ménage et Check-in/Check-out, mais pas Statistiques ni Réglages.</div>
+      <div class="tiny muted" style="margin-top:8px">L'Admin a accès à tout. L'Utilisateur${cloudMode ? '' : ' entre sans mot de passe et'} voit Tableau, Planning, Ménage et Check-in/Check-out, mais pas Statistiques ni Réglages.</div>
     </div>
     <div class="sec-title">Données</div>
     <div class="card">
@@ -799,6 +919,7 @@ function deleteProperty(id) {
 
 // Ajouter une réservation
 function sheetAdd() {
+  if (!isAdmin()) { toast('⛔ Réservé à l\'administrateur'); return; }
   if (!S.properties.length) {
     openSheet(`<h2>+ Nouvelle réservation</h2><div class="empty small">Ajoutez d'abord un logement dans Réglages → Logements.</div>`);
     return;
@@ -927,6 +1048,7 @@ function bindCommon(root) {
     render();
   });
   root.querySelectorAll('[data-clean-assign]').forEach(el => el.onchange = () => {
+    if (!isAdmin()) return;
     const c = S.cleaning.find(x => x.id === el.dataset.cleanAssign);
     c.cleaner = el.value; save();
   });
@@ -960,6 +1082,7 @@ function bindCommon(root) {
     S.cleaningPrices[el.dataset.price] = +el.value || 0; save(); closeSheet(); sheetCleaningHistory();
   });
   root.querySelectorAll('[data-clean-comment]').forEach(el => el.onblur = () => {
+    if (!isAdmin()) return;
     const c = S.cleaning.find(x => x.id === el.dataset.cleanComment);
     c.comment = el.value; save();
   });
@@ -1046,4 +1169,4 @@ function escapeHtml(s) { return s.replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt
 
 // ---------- Boot ----------
 load();
-renderLock();
+initCloudSync().then(renderLock);
