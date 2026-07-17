@@ -2,6 +2,5 @@
   "appId": "com.laurent.gesthote",
   "appName": "GestHôte",
   "webDir": "www",
-  "android": { "allowMixedContent": false },
-  "plugins": { "CapacitorHttp": { "enabled": true } }
+  "android": { "allowMixedContent": false }
 }

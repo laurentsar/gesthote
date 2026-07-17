@@ -1,4 +1,4 @@
 {
-  "version": "1.8.3",
-  "notes": "Corrige l'erreur « accès à la base refusé (unavailable) » qui pouvait empêcher la connexion cloud sur l'application Android : Firestore est désormais initialisé en mode long-polling, compatible avec la WebView Android."
+  "version": "1.8.4",
+  "notes": "Corrige la persistance de l'erreur « accès à la base refusé (unavailable) » : le plugin natif CapacitorHttp (activé par défaut) interceptait tous les appels réseau, y compris ceux de Firestore, et empêchait leur bon fonctionnement. Il est désormais désactivé."
 }
