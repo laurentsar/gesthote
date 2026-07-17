@@ -222,6 +222,7 @@ let TAB = 'home';
 const app = document.getElementById('app');
 
 function render() {
+  if (TAB === 'home' && !isAdmin()) TAB = 'cleaning';
   const views = { home: vHome, plan: vPlanning, cleaning: vCleaning, checkio: vCheckInOut, plus: vPlus };
   const body = (views[TAB] || vHome)();
   app.innerHTML = `<div class="screen">${body}</div>${nav()}`;
@@ -231,7 +232,7 @@ function render() {
 
 function nav() {
   const items = [
-    ['home', '📊', 'Tableau'],
+    ...(isAdmin() ? [['home', '📊', 'Tableau']] : []),
     ['plan', '📅', 'Planning'],
     ['cleaning', '🧹', 'Ménages'],
     ['checkio', '🔑', 'Entretien'],
@@ -367,7 +368,7 @@ function vPlanning() {
   const barHtml = (b, span, leftOffset) => {
     const clean = S.cleaning.find(c => c.bookingId === b.id);
     const cleanerInitial = clean && clean.cleaner ? clean.cleaner.trim()[0].toUpperCase() : '';
-    return `<div class="res-bar" data-open="${b.id}"
+    return `<div class="res-bar" ${isAdmin() ? `data-open="${b.id}"` : ''}
       style="background:${barColor(b.plat)};
       left:${leftOffset};width:calc(${span*100}% + ${span-1}px - 4px);z-index:3">${b.guest.split(' ')[0]}${cleanerInitial ? `<span class="clean-badge" title="Ménage : ${clean.cleaner}">${cleanerInitial}</span>` : ''}</div>`;
   };
@@ -401,7 +402,7 @@ function vPlanning() {
   const range = `${fmtDate(D(planStart))} – ${fmtDate(D(planStart + DAYS - 1))}`;
   return `
   <div class="topbar"><h1>Planning</h1><span class="spacer"></span>
-    <button class="btn sm" data-add>+ Résa</button></div>
+    ${isAdmin() ? `<button class="btn sm" data-add>+ Résa</button>` : ''}</div>
   <div class="btn-row" style="margin-bottom:10px">
     <button class="btn ghost sm" data-plan="-7">← Semaine</button>
     <button class="btn ghost sm" data-plan="0">Aujourd'hui</button>
@@ -476,6 +477,7 @@ const closeSheet = () => document.querySelector('.sheet-bg')?.remove();
 
 // Détail réservation + moteur de messages automatiques
 function sheetBooking(id) {
+  if (!isAdmin()) { toast('⛔ Réservé à l\'administrateur'); return; }
   const b = booking(id);
   const inHouse = b.checkIn <= D(0) && b.checkOut > D(0);
   const past = b.checkOut <= D(0);
@@ -588,11 +590,11 @@ function vCleaning() {
       <div class="avatar" style="background:${p.color}">${p.emoji}</div>
       <div class="grow"><div class="title small">${p.name}</div>
         <div class="tiny muted">${fmtDateJ(c.date)}${nextIn?` · arrivée ${nextIn.guest.split(' ')[0]} même jour`:''}</div>
-        <select data-clean-assign="${c.id}" style="margin-top:6px;padding:6px 8px;border-radius:8px;background:var(--card2);color:var(--txt);border:1px solid var(--line);font-size:12px">
+        <select data-clean-assign="${c.id}" ${isAdmin() ? '' : 'disabled'} style="margin-top:6px;padding:6px 8px;border-radius:8px;background:var(--card2);color:var(--txt);border:1px solid var(--line);font-size:12px">
           <option value="">— Qui fait le ménage ? —</option>
           ${S.cleaners.map(name => `<option value="${name}" ${c.cleaner===name?'selected':''}>${name}</option>`).join('')}
         </select>
-        <textarea data-clean-comment="${c.id}" placeholder="Commentaire (ex. clé cachée, linge à racheter, panne signalée…)" rows="2" style="margin-top:6px;width:100%;padding:8px;border-radius:8px;background:var(--card2);color:var(--txt);border:1px solid var(--line);font:inherit;font-size:12px;resize:vertical">${c.comment || ''}</textarea></div>
+        <textarea data-clean-comment="${c.id}" ${isAdmin() ? '' : 'disabled'} placeholder="Commentaire (ex. clé cachée, linge à racheter, panne signalée…)" rows="2" style="margin-top:6px;width:100%;padding:8px;border-radius:8px;background:var(--card2);color:var(--txt);border:1px solid var(--line);font:inherit;font-size:12px;resize:vertical">${c.comment || ''}</textarea></div>
       <button class="badge ${st[0]}" data-clean="${c.id}">${st[1]}</button>
     </div>`;
   };
@@ -917,6 +919,7 @@ function deleteProperty(id) {
 
 // Ajouter une réservation
 function sheetAdd() {
+  if (!isAdmin()) { toast('⛔ Réservé à l\'administrateur'); return; }
   if (!S.properties.length) {
     openSheet(`<h2>+ Nouvelle réservation</h2><div class="empty small">Ajoutez d'abord un logement dans Réglages → Logements.</div>`);
     return;
@@ -1045,6 +1048,7 @@ function bindCommon(root) {
     render();
   });
   root.querySelectorAll('[data-clean-assign]').forEach(el => el.onchange = () => {
+    if (!isAdmin()) return;
     const c = S.cleaning.find(x => x.id === el.dataset.cleanAssign);
     c.cleaner = el.value; save();
   });
@@ -1078,6 +1082,7 @@ function bindCommon(root) {
     S.cleaningPrices[el.dataset.price] = +el.value || 0; save(); closeSheet(); sheetCleaningHistory();
   });
   root.querySelectorAll('[data-clean-comment]').forEach(el => el.onblur = () => {
+    if (!isAdmin()) return;
     const c = S.cleaning.find(x => x.id === el.dataset.cleanComment);
     c.comment = el.value; save();
   });
