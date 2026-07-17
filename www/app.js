@@ -361,30 +361,39 @@ function alertsList() {
 // ================= PLANNING (calendrier multi-logements) =================
 let planStart = 0;
 function vPlanning() {
-  const props = S.activePid === 'all' ? S.properties : [prop(S.activePid)];
+  const props = S.properties;
   const DAYS = 21;
+  const barColor = plat => PLAT[plat].cls==='b-airbnb'?'#ff5a5f':PLAT[plat].cls==='b-booking'?'#3b82f6':PLAT[plat].cls==='b-direct'?'#a855f7':'#f59e0b';
+  const barHtml = (b, span, leftOffset) => {
+    const clean = S.cleaning.find(c => c.bookingId === b.id);
+    const cleanerInitial = clean && clean.cleaner ? clean.cleaner.trim()[0].toUpperCase() : '';
+    return `<div class="res-bar" data-open="${b.id}"
+      style="background:${barColor(b.plat)};
+      left:${leftOffset};width:calc(${span*100}% + ${span-1}px - 4px);z-index:3">${b.guest.split(' ')[0]}${cleanerInitial ? `<span class="clean-badge" title="Ménage : ${clean.cleaner}">${cleanerInitial}</span>` : ''}</div>`;
+  };
   let head = '';
   for (let i = 0; i < DAYS; i++) {
     const dt = d(planStart + i), wk = dt.getDay() === 0 || dt.getDay() === 6;
-    head += `<th class="${wk?'wknd':''}"><div class="tl-day">${JOURS[dt.getDay()][0].toUpperCase()}<b>${dt.getDate()}</b></div></th>`;
+    const isToday = D(planStart + i) === D(0);
+    head += `<th class="${wk?'wknd':''}${isToday?' today':''}"><div class="tl-day">${JOURS[dt.getDay()][0].toUpperCase()}<b>${dt.getDate()}</b></div></th>`;
   }
   const rows = props.map(p => {
     let cells = '';
+    // Séjour déjà en cours à l'ouverture de la période affichée (arrivée avant le 1er jour visible)
+    const ongoing = S.bookings.find(x => x.pid === p.id && x.checkIn < D(planStart) && x.checkOut > D(planStart));
     for (let i = 0; i < DAYS; i++) {
       const dayIso = D(planStart + i);
       const wk = [0,6].includes(d(planStart+i).getDay());
-      // barre de réservation démarrant ce jour
-      const b = S.bookings.find(x => x.pid === p.id && x.checkIn === dayIso);
+      const isToday = dayIso === D(0);
       let bar = '';
-      if (b) {
-        const span = Math.min(b.nights, DAYS - i);
-        const clean = S.cleaning.find(c => c.bookingId === b.id);
-        const cleanerInitial = clean && clean.cleaner ? clean.cleaner.trim()[0].toUpperCase() : '';
-        bar = `<div class="res-bar" data-open="${b.id}"
-          style="background:${PLAT[b.plat].cls==='b-airbnb'?'#ff5a5f':PLAT[b.plat].cls==='b-booking'?'#3b82f6':PLAT[b.plat].cls==='b-direct'?'#a855f7':'#f59e0b'};
-          left:calc(50% + 2px);width:calc(${span*100}% + ${span-1}px - 4px);z-index:3">${b.guest.split(' ')[0]}${cleanerInitial ? `<span class="clean-badge" title="Ménage : ${clean.cleaner}">${cleanerInitial}</span>` : ''}</div>`;
+      if (i === 0 && ongoing) {
+        const span = Math.min(nightsBetween(D(planStart), ongoing.checkOut), DAYS);
+        bar = barHtml(ongoing, span, '2px');
+      } else {
+        const b = S.bookings.find(x => x.pid === p.id && x.checkIn === dayIso);
+        if (b) bar = barHtml(b, Math.min(b.nights, DAYS - i), 'calc(50% + 2px)');
       }
-      cells += `<td class="${wk?'wknd':''}">${bar}</td>`;
+      cells += `<td class="${wk?'wknd':''}${isToday?' today':''}">${bar}</td>`;
     }
     return `<tr><th class="prop-cell">${p.emoji} ${p.name}</th>${cells}</tr>`;
   }).join('');
@@ -393,7 +402,6 @@ function vPlanning() {
   return `
   <div class="topbar"><h1>Planning</h1><span class="spacer"></span>
     <button class="btn sm" data-add>+ Résa</button></div>
-  ${propSwitch()}
   <div class="btn-row" style="margin-bottom:10px">
     <button class="btn ghost sm" data-plan="-7">← Semaine</button>
     <button class="btn ghost sm" data-plan="0">Aujourd'hui</button>
@@ -745,7 +753,9 @@ function vCheckInOut() {
     <label class="small muted">🛁 Jacuzzi rempli le</label>
     <input type="date" data-checkio-date="${p.id}|jacuzziFilledDate" value="${p.jacuzziFilledDate || ''}" style="${FIELD}">
     <label class="small muted">${dot('🌿 Arrosé le', overdue(p.wateredDate, 3))}</label>
-    <input type="date" data-checkio-date="${p.id}|wateredDate" value="${p.wateredDate || ''}" style="width:100%;margin:6px 0 0;padding:11px;border-radius:10px;background:var(--card2);color:var(--txt);border:1px solid var(--line)">
+    <input type="date" data-checkio-date="${p.id}|wateredDate" value="${p.wateredDate || ''}" style="${FIELD}">
+    <label class="small muted">${dot('🚜 Tondeuse fait le', overdue(p.mowedDate, 10))}</label>
+    <input type="date" data-checkio-date="${p.id}|mowedDate" value="${p.mowedDate || ''}" style="width:100%;margin:6px 0 0;padding:11px;border-radius:10px;background:var(--card2);color:var(--txt);border:1px solid var(--line)">
   </div>`;
 }
 
