@@ -1,4 +1,4 @@
 {
-  "version": "1.8.1",
-  "notes": "Active la synchronisation cloud avec le projet Firebase de production. Les données (logements, réservations, ménage) sont désormais synchronisées en temps réel entre tous les appareils connectés au même compte."
+  "version": "1.8.2",
+  "notes": "Corrige un message d'erreur trompeur à la connexion cloud : un problème d'accès à Firestore (ex. règles de sécurité non publiées) affichait à tort « Email ou mot de passe incorrect ». Le message indique désormais la vraie cause."
 }
