@@ -1,4 +1,4 @@
 {
-  "version": "1.8.0",
-  "notes": "Synchronisation cloud optionnelle via Firebase (désactivée par défaut). Corrige plusieurs bugs du planning (nom du logement, séjours en cours, jour courant surligné, filtre logement retiré). Ajoute le suivi tondeuse dans Entretien. Restreint le compte Utilisateur (pas de Tableau, pas d'ajout/ouverture de réservation, ménage en lecture seule)."
+  "version": "1.8.1",
+  "notes": "Active la synchronisation cloud avec le projet Firebase de production. Les données (logements, réservations, ménage) sont désormais synchronisées en temps réel entre tous les appareils connectés au même compte."
 }
