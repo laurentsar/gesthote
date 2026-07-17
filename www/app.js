@@ -92,7 +92,15 @@ async function initCloudSync() {
       import('https://www.gstatic.com/firebasejs/12.16.0/firebase-auth.js'),
     ]);
     const app = initializeApp(cfg);
-    fbDb = firestoreMod.getFirestore(app);
+    // Les WebView Android (utilisées par l'app Capacitor) ne supportent pas
+    // toujours les flux HTTP/2 streaming dont Firestore a besoin par défaut
+    // (getFirestore), ce qui provoque des erreurs "unavailable" au moment de
+    // lire/écrire un document alors que l'authentification (simple HTTPS)
+    // fonctionne. On force donc le long-polling, fiable dans une WebView.
+    fbDb = firestoreMod.initializeFirestore(app, {
+      experimentalAutoDetectLongPolling: true,
+      useFetchStreams: false,
+    });
     fbAuth = authMod.getAuth(app);
     Object.assign(fb, {
       doc: firestoreMod.doc, getDoc: firestoreMod.getDoc,
