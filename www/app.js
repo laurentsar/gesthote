@@ -133,8 +133,16 @@ async function attemptCloudLogin() {
   const email = document.getElementById('login-email').value.trim();
   const password = document.getElementById('login-password').value;
   const msg = document.getElementById('lock-msg');
+  let cred;
   try {
-    const cred = await fb.signInWithEmailAndPassword(fbAuth, email, password);
+    cred = await fb.signInWithEmailAndPassword(fbAuth, email, password);
+  } catch (e) {
+    if (msg) msg.textContent = e.code === 'auth/network-request-failed'
+      ? '⛔ Pas de connexion internet — réessayez.'
+      : '⛔ Email ou mot de passe incorrect.';
+    return;
+  }
+  try {
     const snap = await fb.getDoc(workspaceDocRef());
     if (snap.exists()) {
       S = snap.data();
@@ -149,10 +157,7 @@ async function attemptCloudLogin() {
     subscribeCloud();
     render();
   } catch (e) {
-    if (!msg) return;
-    msg.textContent = e.code === 'auth/network-request-failed'
-      ? '⛔ Pas de connexion internet — réessayez.'
-      : '⛔ Email ou mot de passe incorrect.';
+    if (msg) msg.textContent = `⛔ Connecté, mais accès à la base refusé (${e.code || e.message}). Vérifiez les règles Firestore.`;
   }
 }
 const booking = id => S.bookings.find(b => b.id === id);
