@@ -1,4 +1,4 @@
 {
-  "version": "1.8.8",
-  "notes": "Corrige une faille de droits : le compte Utilisateur pouvait accéder au menu « Gérer la liste des intervenants » (ajout/suppression) depuis l'écran Ménages, réservé à l'Admin. Verrouille aussi l'édition des ménages déjà effectués dans l'Historique pour le compte Utilisateur."
+  "version": "1.8.9",
+  "notes": "Écran de connexion : vérification de mise à jour à chaque affichage, bouton pour afficher le mot de passe, email cloud mémorisé, et déconnexion automatique après 5 minutes d'inactivité."
 }

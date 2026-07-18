@@ -172,6 +172,8 @@ async function attemptCloudLogin() {
     if (needsPush) await fb.setDoc(workspaceDocRef(), S);
     currentRole = (email === S.accounts.admin.email) ? 'admin' : 'user';
     cloudReady = true;
+    setLastEmail(email);
+    resetIdleTimer();
     subscribeCloud();
     render();
   } catch (e) {
@@ -186,17 +188,27 @@ const booking = id => S.bookings.find(b => b.id === id);
 let currentRole = null;
 const isAdmin = () => currentRole === 'admin';
 
+const LAST_EMAIL_KEY = 'gesthote.lastEmail';
+const lastEmail = () => { try { return localStorage.getItem(LAST_EMAIL_KEY) || ''; } catch (e) { return ''; } };
+const setLastEmail = email => { try { localStorage.setItem(LAST_EMAIL_KEY, email); } catch (e) {} };
+
+const pwToggleBtn = id => `<button type="button" class="btn ghost" data-pw-toggle="${id}" style="padding:0 16px" aria-label="Afficher le mot de passe">👁</button>`;
+
 function renderLock() {
+  if (typeof checkForUpdate === 'function') checkForUpdate();
   app.innerHTML = `
     <div class="screen" style="display:flex;flex-direction:column;justify-content:center;align-items:center;gap:22px;min-height:calc(100vh - var(--nav-h) - var(--safe-b) - var(--safe-t) - 32px);padding:24px;text-align:center">
       <img src="img/logo-chalets-du-pialou.jpg" alt="" style="width:88px;height:88px;border-radius:20px;object-fit:cover">
       <div><h1 style="margin:0 0 4px">GestHôte</h1><div class="small muted">${cloudMode ? 'Connectez-vous' : 'Choisissez votre compte'}</div></div>
       ${cloudMode ? `
       <div style="width:100%;max-width:320px">
-        <input id="login-email" type="email" placeholder="Email" autofocus
+        <input id="login-email" type="email" placeholder="Email" autofocus value="${lastEmail()}"
           style="width:100%;padding:11px;border-radius:10px;background:var(--card2);color:var(--txt);border:1px solid var(--line);text-align:center">
-        <input id="login-password" type="password" placeholder="Mot de passe"
-          style="width:100%;margin-top:10px;padding:11px;border-radius:10px;background:var(--card2);color:var(--txt);border:1px solid var(--line);text-align:center">
+        <div style="display:flex;gap:8px;margin-top:10px">
+          <input id="login-password" type="password" placeholder="Mot de passe"
+            style="flex:1;padding:11px;border-radius:10px;background:var(--card2);color:var(--txt);border:1px solid var(--line);text-align:center">
+          ${pwToggleBtn('login-password')}
+        </div>
         <button class="btn block" id="cloud-login-go" style="margin-top:10px">Se connecter</button>
         <div id="lock-msg" class="small muted" style="margin-top:8px"></div>
       </div>` : `
@@ -206,6 +218,12 @@ function renderLock() {
       </div>
       <div id="lock-form" style="width:100%;max-width:320px"></div>`}
     </div>`;
+  app.querySelectorAll('[data-pw-toggle]').forEach(el => el.onclick = () => {
+    const input = document.getElementById(el.dataset.pwToggle);
+    const show = input.type === 'password';
+    input.type = show ? 'text' : 'password';
+    el.textContent = show ? '🙈' : '👁';
+  });
   if (cloudMode) {
     const submit = () => attemptCloudLogin();
     document.getElementById('cloud-login-go').onclick = submit;
@@ -216,17 +234,26 @@ function renderLock() {
 }
 
 function attemptLogin(role) {
-  if (role === 'user') { currentRole = 'user'; render(); return; }
+  if (role === 'user') { currentRole = 'user'; resetIdleTimer(); render(); return; }
   const box = document.getElementById('lock-form');
   box.innerHTML = `
-    <input id="admin-pass" type="password" placeholder="Mot de passe Admin" autofocus
-      style="width:100%;margin-top:6px;padding:11px;border-radius:10px;background:var(--card2);color:var(--txt);border:1px solid var(--line);text-align:center">
+    <div style="display:flex;gap:8px;margin-top:6px">
+      <input id="admin-pass" type="password" placeholder="Mot de passe Admin" autofocus
+        style="flex:1;padding:11px;border-radius:10px;background:var(--card2);color:var(--txt);border:1px solid var(--line);text-align:center">
+      ${pwToggleBtn('admin-pass')}
+    </div>
     <button class="btn block" id="admin-pass-go" style="margin-top:10px">Se connecter</button>
     <div id="lock-msg" class="small muted" style="margin-top:8px"></div>`;
+  box.querySelectorAll('[data-pw-toggle]').forEach(el => el.onclick = () => {
+    const input = document.getElementById(el.dataset.pwToggle);
+    const show = input.type === 'password';
+    input.type = show ? 'text' : 'password';
+    el.textContent = show ? '🙈' : '👁';
+  });
   const input = box.querySelector('#admin-pass');
   input.focus();
   const submit = () => {
-    if (input.value === S.accounts.admin.password) { currentRole = 'admin'; render(); }
+    if (input.value === S.accounts.admin.password) { currentRole = 'admin'; resetIdleTimer(); render(); }
     else { document.getElementById('lock-msg').textContent = '⛔ Mot de passe incorrect.'; input.value = ''; input.focus(); }
   };
   box.querySelector('#admin-pass-go').onclick = submit;
@@ -236,10 +263,24 @@ function attemptLogin(role) {
 function lockApp() {
   currentRole = null;
   cloudReady = false;
+  clearTimeout(idleTimer);
   if (fbUnsub) { fbUnsub(); fbUnsub = null; }
   if (cloudMode) fb.signOut(fbAuth).catch(() => {});
   renderLock();
 }
+
+// ---------- Déconnexion automatique après inactivité ----------
+const IDLE_MS = 5 * 60 * 1000;
+let idleTimer = null;
+function resetIdleTimer() {
+  clearTimeout(idleTimer);
+  if (!currentRole) return;
+  idleTimer = setTimeout(() => {
+    if (currentRole) { lockApp(); toast('🔒 Déconnecté pour inactivité'); }
+  }, IDLE_MS);
+}
+['click', 'keydown', 'touchstart', 'pointerdown'].forEach(evt =>
+  document.addEventListener(evt, resetIdleTimer, { passive: true }));
 
 // ---------- Routeur ----------
 let TAB = 'home';
