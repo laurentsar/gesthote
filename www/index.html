@@ -15,7 +15,7 @@
     // Version installée + repo PUBLIC de releases interrogé par update-check.js.
     // Code source privé (laurentsar/gesthote) ; APK/versions publiés sur
     // laurentsar/gesthote-releases (public) par le CI.
-    const APP_VERSION = '1.8.4';
+    const APP_VERSION = '1.8.5';
     window.APP_VERSION = APP_VERSION;
     window.UPDATE_REPO = 'laurentsar/gesthote-releases';
 
@@ -34,6 +34,12 @@
       messagingSenderId: "302635673844",
       appId: "1:302635673844:web:424faea91e72bfe29216a1"
     };
+
+    // Email qui doit toujours être reconnu comme Admin, quel que soit le
+    // contenu du document cloud (auto-réparation en cas de désynchro).
+    // Laissez vide ("") pour revenir à l'ancien comportement (le premier
+    // compte à se connecter devient Admin).
+    window.ADMIN_EMAIL = "laurentsar@gmail.com";
 
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('sw.js').catch(() => {});
