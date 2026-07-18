@@ -627,7 +627,7 @@ function vCleaning() {
   ${propSwitch()}
   <div class="small muted" style="margin-bottom:10px">Une intervention est créée à chaque départ. Choisissez qui s'en charge dans la liste, touchez le statut pour le faire avancer.</div>
   <div class="card">${list.length ? list.map(item).join('') : '<div class="empty small">Rien à nettoyer</div>'}</div>
-  <button class="btn ghost block" data-manage-cleaners>⚙️ Gérer la liste des intervenants</button>`;
+  ${isAdmin() ? `<button class="btn ghost block" data-manage-cleaners>⚙️ Gérer la liste des intervenants</button>` : ''}`;
 }
 
 // Confirmation de fin de ménage : quantité de linge à laver
@@ -663,7 +663,8 @@ function sheetCleaningHistory() {
     .filter(c => !cleanHistoryFilter.month || c.date.slice(0,7) === cleanHistoryFilter.month)
     .filter(c => cleanHistoryFilter.cleaner === 'all' || c.cleaner === cleanHistoryFilter.cleaner)
     .sort((a,b) => b.date.localeCompare(a.date));
-  const minuteSelect = c => `<select data-hist-minutes="${c.id}" style="margin-top:6px;padding:10px;border-radius:10px;background:var(--card2);color:var(--txt);border:1px solid var(--line);width:100%">
+  const ro = isAdmin() ? '' : 'disabled';
+  const minuteSelect = c => `<select data-hist-minutes="${c.id}" ${ro} style="margin-top:6px;padding:10px;border-radius:10px;background:var(--card2);color:var(--txt);border:1px solid var(--line);width:100%">
     ${[0,10,20,30,40,50].map(m => `<option value="${m}" ${(c.durationMin||0)%60===m?'selected':''}>${m} min</option>`).join('')}
   </select>`;
   const item = c => {
@@ -674,22 +675,22 @@ function sheetCleaningHistory() {
         <div class="grow title small">${p.name}</div>
       </div>
       <label class="small muted">Date</label>
-      <input type="date" data-hist-date="${c.id}" value="${c.date}" style="${FIELD}">
+      <input type="date" data-hist-date="${c.id}" ${ro} value="${c.date}" style="${FIELD}">
       <label class="small muted">Intervenant</label>
-      <select data-hist-cleaner="${c.id}" style="${FIELD}">
+      <select data-hist-cleaner="${c.id}" ${ro} style="${FIELD}">
         <option value="">—</option>
         ${S.cleaners.map(n => `<option value="${n}" ${c.cleaner===n?'selected':''}>${n}</option>`).join('')}
       </select>
       <div style="display:flex;gap:10px">
         <div style="flex:1"><label class="small muted">Heures</label>
-          <input type="number" inputmode="numeric" min="0" data-hist-hours="${c.id}" value="${Math.floor((c.durationMin||0)/60)}" style="margin-top:6px;padding:10px;border-radius:10px;background:var(--card2);color:var(--txt);border:1px solid var(--line);width:100%"></div>
+          <input type="number" inputmode="numeric" min="0" data-hist-hours="${c.id}" ${ro} value="${Math.floor((c.durationMin||0)/60)}" style="margin-top:6px;padding:10px;border-radius:10px;background:var(--card2);color:var(--txt);border:1px solid var(--line);width:100%"></div>
         <div style="flex:1"><label class="small muted">Minutes</label>${minuteSelect(c)}</div>
       </div>
       <div style="display:flex;gap:10px;margin-top:12px">
         <div style="flex:1"><label class="small muted">Serviettes</label>
-          <input type="number" inputmode="numeric" min="0" data-hist-towels="${c.id}" value="${c.towels||0}" style="margin-top:6px;padding:10px;border-radius:10px;background:var(--card2);color:var(--txt);border:1px solid var(--line);width:100%"></div>
+          <input type="number" inputmode="numeric" min="0" data-hist-towels="${c.id}" ${ro} value="${c.towels||0}" style="margin-top:6px;padding:10px;border-radius:10px;background:var(--card2);color:var(--txt);border:1px solid var(--line);width:100%"></div>
         <div style="flex:1"><label class="small muted">Paires de draps</label>
-          <input type="number" inputmode="numeric" min="0" data-hist-sheets="${c.id}" value="${c.sheetPairs||0}" style="margin-top:6px;padding:10px;border-radius:10px;background:var(--card2);color:var(--txt);border:1px solid var(--line);width:100%"></div>
+          <input type="number" inputmode="numeric" min="0" data-hist-sheets="${c.id}" ${ro} value="${c.sheetPairs||0}" style="margin-top:6px;padding:10px;border-radius:10px;background:var(--card2);color:var(--txt);border:1px solid var(--line);width:100%"></div>
       </div>
     </div>`;
   };
@@ -735,6 +736,7 @@ function sheetCleaningHistory() {
 
 // Gestion de la liste des intervenants ménage
 function sheetCleaners() {
+  if (!isAdmin()) { toast('⛔ Réservé à l\'administrateur'); return; }
   openSheet(`
     <h2>👤 Intervenants ménage</h2>
     <div class="small muted" style="margin-bottom:10px">Liste des personnes ou équipes qui peuvent être assignées au ménage.</div>
