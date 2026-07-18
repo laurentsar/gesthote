@@ -47,27 +47,35 @@
       .slice(0, 4);
   }
 
-  var last = parseInt(ls(true, KEY_POLL), 10) || 0;
-  if (Date.now() - last < POLL_INTERVAL) return;
+  function runCheck(force) {
+    var last = parseInt(ls(true, KEY_POLL), 10) || 0;
+    if (!force && Date.now() - last < POLL_INTERVAL) return;
 
-  // Cache-buster (_) : évite qu'un service worker "cache-first" serve une
-  // réponse d'API périmée. GitHub ignore les paramètres inconnus.
-  fetch('https://api.github.com/repos/' + REPO + '/releases/latest?_=' + Date.now(), {
-    headers: { Accept: 'application/vnd.github+json' }
-  })
-    .then(function (r) { return r.ok ? r.json() : null; })
-    .then(function (rel) {
-      if (!rel || !rel.tag_name) return;
-      ls(false, KEY_POLL, Date.now());
-      var latest = String(rel.tag_name).replace(/^v/, '');
-      if (cmp(latest, CURRENT) <= 0) return;          // déjà à jour
-      if (ls(true, KEY_DISMISS) === latest) return;    // version déjà ignorée
-      var apk = (rel.assets || []).filter(function (a) {
-        return /\.apk$/i.test(a.name);
-      })[0];
-      showCard(latest, apk ? apk.browser_download_url : rel.html_url, extractNotes(rel.body));
+    // Cache-buster (_) : évite qu'un service worker "cache-first" serve une
+    // réponse d'API périmée. GitHub ignore les paramètres inconnus.
+    fetch('https://api.github.com/repos/' + REPO + '/releases/latest?_=' + Date.now(), {
+      headers: { Accept: 'application/vnd.github+json' }
     })
-    .catch(function () { /* hors-ligne : silencieux */ });
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (rel) {
+        if (!rel || !rel.tag_name) return;
+        ls(false, KEY_POLL, Date.now());
+        var latest = String(rel.tag_name).replace(/^v/, '');
+        if (cmp(latest, CURRENT) <= 0) return;          // déjà à jour
+        if (ls(true, KEY_DISMISS) === latest) return;    // version déjà ignorée
+        var apk = (rel.assets || []).filter(function (a) {
+          return /\.apk$/i.test(a.name);
+        })[0];
+        showCard(latest, apk ? apk.browser_download_url : rel.html_url, extractNotes(rel.body));
+      })
+      .catch(function () { /* hors-ligne : silencieux */ });
+  }
+
+  // Vérification automatique au chargement (respecte le throttle 6h).
+  runCheck(false);
+  // Vérification forcée exposée pour l'écran de connexion (bypass throttle) :
+  // on veut toujours savoir si l'app est à jour avant de se connecter.
+  window.checkForUpdate = function () { runCheck(true); };
 
   function showCard(version, url, notes) {
     if (document.getElementById('update-card')) return;
