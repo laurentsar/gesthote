@@ -1,4 +1,4 @@
 {
-  "version": "1.8.4",
-  "notes": "Corrige la persistance de l'erreur « accès à la base refusé (unavailable) » : le plugin natif CapacitorHttp (activé par défaut) interceptait tous les appels réseau, y compris ceux de Firestore, et empêchait leur bon fonctionnement. Il est désormais désactivé."
+  "version": "1.8.5",
+  "notes": "Corrige l'attribution du rôle Admin en mode cloud : l'email admin peut désormais s'auto-réparer via une config fiable côté app, et le document cloud n'est plus jamais écrasé avant qu'une connexion ait réellement abouti."
 }

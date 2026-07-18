@@ -78,7 +78,7 @@ const prop = id => S.properties.find(p => p.id === id);
 // synchronisées en temps réel via Firestore entre tous les appareils connectés
 // au même projet Firebase. Sinon (par défaut), l'app reste 100% locale,
 // exactement comme avant — aucun changement de comportement.
-let cloudMode = false;
+let cloudMode = false, cloudReady = false;
 let fbDb = null, fbAuth = null, fbUnsub = null, applyingRemoteUpdate = false, cloudPushTimer = null;
 const fb = {};
 
@@ -130,7 +130,7 @@ function subscribeCloud() {
 }
 
 function pushCloud() {
-  if (!cloudMode || applyingRemoteUpdate) return;
+  if (!cloudMode || !cloudReady || applyingRemoteUpdate) return;
   clearTimeout(cloudPushTimer);
   cloudPushTimer = setTimeout(() => {
     fb.setDoc(workspaceDocRef(), S).catch(e => console.error('Échec de synchro cloud', e));
@@ -152,16 +152,26 @@ async function attemptCloudLogin() {
   }
   try {
     const snap = await fb.getDoc(workspaceDocRef());
+    let needsPush = !snap.exists();
     if (snap.exists()) {
       S = snap.data();
       try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {}
-    } else {
-      // Premier login jamais effectué sur ce projet : cet email devient Admin
-      // et initialise le document partagé avec les données locales actuelles.
-      S.accounts.admin.email = email;
-      await fb.setDoc(workspaceDocRef(), S);
     }
+    // window.ADMIN_EMAIL (défini dans index.html) fait toujours autorité
+    // quand il est renseigné : ça évite qu'un document cloud désynchronisé
+    // ou créé par erreur par un autre compte ne prive le vrai administrateur
+    // de ses droits (auto-réparation de S.accounts.admin.email si besoin).
+    // À défaut, on garde l'ancien comportement : le tout premier compte à se
+    // connecter (document inexistant) devient Admin.
+    const adminEmail = window.ADMIN_EMAIL || '';
+    const shouldBeAdmin = adminEmail ? (email === adminEmail) : !snap.exists();
+    if (shouldBeAdmin && S.accounts.admin.email !== email) {
+      S.accounts.admin.email = email;
+      needsPush = true;
+    }
+    if (needsPush) await fb.setDoc(workspaceDocRef(), S);
     currentRole = (email === S.accounts.admin.email) ? 'admin' : 'user';
+    cloudReady = true;
     subscribeCloud();
     render();
   } catch (e) {
@@ -225,6 +235,7 @@ function attemptLogin(role) {
 
 function lockApp() {
   currentRole = null;
+  cloudReady = false;
   if (fbUnsub) { fbUnsub(); fbUnsub = null; }
   if (cloudMode) fb.signOut(fbAuth).catch(() => {});
   renderLock();
