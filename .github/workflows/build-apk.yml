@@ -55,6 +55,11 @@ jobs:
       - name: Sync versionName from www/version.json
         run: python3 ci/set_version.py
 
+      - name: Replace default launcher icon with the Chalets du Pialou logo
+        run: |
+          pip install --quiet Pillow
+          python3 ci/set_icons.py
+
       - name: Sync Capacitor (Android)
         run: npx cap sync android
 

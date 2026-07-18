@@ -1,4 +1,4 @@
 {
-  "version": "1.8.6",
-  "notes": "Met à jour l'email configuré comme Admin en mode cloud."
+  "version": "1.8.7",
+  "notes": "Remplace l'icône par défaut de l'application (Capacitor) par le logo Les Chalets du Pialou : icône de l'app Android, écran de démarrage et icône PWA."
 }

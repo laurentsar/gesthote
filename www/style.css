@@ -34,8 +34,8 @@ button { font-family: inherit; cursor: pointer; }
 a { color: inherit; }
 
 /* Splash */
-.splash { height: 100vh; display: grid; place-items: center; }
-.splash .logo { font-size: 64px; animation: pop .6s ease; }
+.splash { height: 100vh; display: grid; place-items: center; background: #0c3c2d; }
+.splash .logo { width: 128px; height: 128px; border-radius: 28px; animation: pop .6s ease; }
 @keyframes pop { from { transform: scale(.4); opacity: 0; } }
 
 #app { min-height: 100%; }
