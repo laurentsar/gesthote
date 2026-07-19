@@ -425,17 +425,27 @@ function alertsList() {
 }
 
 // ================= PLANNING (calendrier multi-logements) =================
-let planStart = 0;
+let planMonthOffset = 0;
+// Décalage (en jours depuis aujourd'hui) du 1er jour du mois visé, et nombre
+// de jours dans ce mois — permet de réutiliser d()/D() (offsets depuis J0).
+function monthRange(offset) {
+  const now = today0();
+  const first = new Date(now.getFullYear(), now.getMonth() + offset, 1);
+  const daysInMonth = new Date(now.getFullYear(), now.getMonth() + offset + 1, 0).getDate();
+  const planStart = Math.round((first - now) / DAY);
+  return { planStart, DAYS: daysInMonth };
+}
 function vPlanning() {
   const props = S.properties;
-  const DAYS = 21;
+  const { planStart, DAYS } = monthRange(planMonthOffset);
   const barColor = plat => PLAT[plat].cls==='b-airbnb'?'#ff5a5f':PLAT[plat].cls==='b-booking'?'#3b82f6':PLAT[plat].cls==='b-direct'?'#a855f7':'#f59e0b';
-  const barHtml = (b, span, leftOffset) => {
+  const barHtml = (b, span, leftOffset, extraHalfCell) => {
     const clean = S.cleaning.find(c => c.bookingId === b.id);
     const cleanerInitial = clean && clean.cleaner ? clean.cleaner.trim()[0].toUpperCase() : '';
+    const widthPct = span * 100 + (extraHalfCell ? 50 : 0);
     return `<div class="res-bar" ${isAdmin() ? `data-open="${b.id}"` : ''}
       style="background:${barColor(b.plat)};
-      left:${leftOffset};width:calc(${span*100}% + ${span-1}px - 4px);z-index:3">${b.guest.split(' ')[0]}${cleanerInitial ? `<span class="clean-badge" title="Ménage : ${clean.cleaner}">${cleanerInitial}</span>` : ''}</div>`;
+      left:${leftOffset};width:calc(${widthPct}% + ${span-1}px - 4px);z-index:3">${b.guest.split(' ')[0]}${cleanerInitial ? `<span class="clean-badge" title="Ménage : ${clean.cleaner}">${cleanerInitial}</span>` : ''}</div>`;
   };
   let head = '';
   for (let i = 0; i < DAYS; i++) {
@@ -454,7 +464,7 @@ function vPlanning() {
       let bar = '';
       if (i === 0 && ongoing) {
         const span = Math.min(nightsBetween(D(planStart), ongoing.checkOut), DAYS);
-        bar = barHtml(ongoing, span, '2px');
+        bar = barHtml(ongoing, span, '2px', true);
       } else {
         const b = S.bookings.find(x => x.pid === p.id && x.checkIn === dayIso);
         if (b) bar = barHtml(b, Math.min(b.nights, DAYS - i), 'calc(50% + 2px)');
@@ -464,15 +474,18 @@ function vPlanning() {
     return `<tr><th class="prop-cell">${p.emoji} ${p.name}</th>${cells}</tr>`;
   }).join('');
 
-  const range = `${fmtDate(D(planStart))} – ${fmtDate(D(planStart + DAYS - 1))}`;
+  const monthLabel = (() => {
+    const first = d(planStart);
+    return `${MOIS[first.getMonth()]} ${first.getFullYear()}`;
+  })();
   return `
   <div class="topbar"><h1>Planning</h1><span class="spacer"></span>
     ${isAdmin() ? `<button class="btn sm" data-add>+ Résa</button>` : ''}</div>
   <div class="btn-row" style="margin-bottom:10px">
-    <button class="btn ghost sm" data-plan="-7">← Semaine</button>
-    <button class="btn ghost sm" data-plan="0">Aujourd'hui</button>
-    <button class="btn ghost sm" data-plan="7">Semaine →</button>
-    <span class="spacer" style="flex:1"></span><span class="small muted" style="align-self:center">${range}</span>
+    <button class="btn ghost sm" data-plan-month="-1">← Mois</button>
+    <button class="btn ghost sm" data-plan-month="0">Aujourd'hui</button>
+    <button class="btn ghost sm" data-plan-month="1">Mois →</button>
+    <span class="spacer" style="flex:1"></span><span class="small muted" style="align-self:center">${monthLabel}</span>
   </div>
   <div class="card" style="padding:0;overflow:hidden">
     <div class="planning-scroll"><table class="timeline">
@@ -1067,8 +1080,8 @@ function bindCommon(root) {
     S.accounts[el.dataset.accountPassword].password = el.value;
     save();
   });
-  root.querySelectorAll('[data-plan]').forEach(el => el.onclick = () => {
-    const v = +el.dataset.plan; planStart = v === 0 ? 0 : planStart + v; render();
+  root.querySelectorAll('[data-plan-month]').forEach(el => el.onclick = () => {
+    const v = +el.dataset.planMonth; planMonthOffset = v === 0 ? 0 : planMonthOffset + v; render();
   });
   root.querySelectorAll('[data-more]').forEach(el => el.onclick = () => {
     ({ cleanhist: sheetCleaningHistory, stats: sheetStats, settings: sheetSettings }[el.dataset.more])();
