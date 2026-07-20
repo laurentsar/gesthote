@@ -40,6 +40,9 @@ jobs:
       - name: Configure release signing
         run: python3 ci/patch_signing.py
 
+      - name: Autoriser HTTP local (Home Assistant)
+        run: python3 ci/patch_manifest.py
+
       - name: Sync versionName from www/version.json
         run: python3 ci/set_version.py
 
