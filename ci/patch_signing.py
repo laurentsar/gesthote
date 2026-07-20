@@ -13,7 +13,7 @@ signing = """    signingConfigs {
         release {
             storeFile file('signing.p12')
             storePassword System.getenv('ANDROID_KEYSTORE_PASSWORD')
-            keyAlias 'app'
+            keyAlias System.getenv('ANDROID_KEY_ALIAS') ?: 'app'
             keyPassword System.getenv('ANDROID_KEYSTORE_PASSWORD')
             storeType 'PKCS12'
         }

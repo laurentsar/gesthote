@@ -1,0 +1,90 @@
+name: APK de transition (ancienne cle)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      RELEASE_PAT: ${{ secrets.RELEASE_PAT }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Setup JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install JS deps
+        run: npm install --no-audit --no-fund
+
+
+      - name: Regenerate Android platform (fresh each build)
+        run: |
+          rm -rf android
+          npx cap add android
+
+      - name: Configure release signing
+        run: python3 ci/patch_signing.py
+
+      - name: Sync versionName from www/version.json
+        run: python3 ci/set_version.py
+
+      - name: Replace default launcher icon with the Chalets du Pialou logo
+        run: |
+          pip install --quiet Pillow
+          python3 ci/set_icons.py
+
+      - name: Sync Capacitor (Android)
+        run: npx cap sync android
+
+      - name: Make gradlew executable
+        run: chmod +x android/gradlew
+
+      - name: Restore signing keystore
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_OLD_KEYSTORE_B64 }}
+        run: |
+          if [ -z "$KEYSTORE_B64" ]; then
+            echo "::error::secret ANDROID_OLD_KEYSTORE_B64 absent"; exit 1
+          fi
+          mkdir -p android/app
+          printf '%s' "$KEYSTORE_B64" | base64 -d > android/app/signing.p12
+
+      - name: Build release APK (signed)
+        working-directory: android
+        env:
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_OLD_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_OLD_KEY_ALIAS }}
+        run: ./gradlew assembleRelease --no-daemon
+
+      - name: Read app version
+        id: version
+        run: |
+          VERSION=$(grep -oP 'versionName\s+"\K[^"]+' android/app/build.gradle)
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Rename APK with version
+        run: cp android/app/build/outputs/apk/release/app-release.apk "gesthote-${{ steps.version.outputs.version }}.apk"
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: gesthote-TRANSITION-apk
+          path: gesthote-${{ steps.version.outputs.version }}.apk
+          if-no-files-found: error
+
+
