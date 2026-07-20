@@ -12,12 +12,20 @@
 </head>
 <body>
   <div id="app"><div class="splash"><img class="logo" src="img/icon-flat.png" alt=""></div></div>
+
+<details id="backup-details" style="margin:16px auto;max-width:900px;padding:0 12px">
+  <summary style="cursor:pointer;font-weight:600;padding:8px 0">💾 Sauvegarde des données</summary>
+  <p style="font-size:13px;opacity:.8">Tes données vivent sur ce téléphone : désinstaller l'app
+  les efface. Renseigne Home Assistant ci-dessous et la sauvegarde devient automatique.</p>
+  <div id="backup-panel"></div>
+</details>
+
   <script type="module" src="app.js"></script>
   <script>
     // Version installée + repo PUBLIC de releases interrogé par update-check.js.
     // Code source privé (laurentsar/gesthote) ; APK/versions publiés sur
     // laurentsar/gesthote-releases (public) par le CI.
-    const APP_VERSION = '1.8.10';
+    const APP_VERSION = '1.8.11';
     window.APP_VERSION = APP_VERSION;
     window.UPDATE_REPO = 'laurentsar/gesthote-releases';
 
@@ -52,5 +60,8 @@
     }
   </script>
   <script src="update-check.js" defer></script>
+  <script>window.BACKUP_APP = 'gesthote';</script>
+  <script src="autobackup.js"></script>
+  <script>AutoBackup.mount(document.getElementById('backup-panel'));</script>
 </body>
 </html>

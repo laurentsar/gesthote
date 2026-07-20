@@ -1,6 +1,6 @@
 {
   "name": "gesthote-app",
-  "version": "1.8.10",
+  "version": "1.8.11",
   "private": true,
   "description": "Gestion de locations courte durée (PMS + channel manager) — style Superhote",
   "scripts": { "sync": "cap sync android", "open": "cap open android" },
