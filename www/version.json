@@ -1,4 +1,4 @@
 {
-  "version": "1.8.11",
+  "version": "1.8.12",
   "notes": "Planning : affiche le mois en cours en entier et se parcourt mois par mois (au lieu de semaine par semaine). Corrige un affichage où un séjour déjà en cours au début de la période visible se terminait visuellement la veille du départ au lieu du milieu du jour de départ."
 }
