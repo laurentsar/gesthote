@@ -3,3 +3,7 @@ node_modules/
 android/
 *.log
 .DS_Store
+
+# signing keystores never live in the repo
+*.p12
+*.jks

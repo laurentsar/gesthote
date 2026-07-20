@@ -1,4 +1,4 @@
-const CACHE = 'gesthote-v2';
+const CACHE = 'gesthote-v1.8.10';
 const ASSETS = ['/', '/index.html', '/app.js', '/style.css', '/manifest.webmanifest', '/update-check.js', '/img/icon-flat.png', '/img/icon-192.png', '/img/icon-512.png'];
 
 self.addEventListener('install', e => {

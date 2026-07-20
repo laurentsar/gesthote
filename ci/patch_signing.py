@@ -5,16 +5,16 @@ import re
 P = 'android/app/build.gradle'
 s = open(P).read()
 
-if 'gesthote.p12' in s:
+if 'signing.p12' in s:
     print('signing déjà configuré')
     raise SystemExit(0)
 
 signing = """    signingConfigs {
         release {
-            storeFile file('gesthote.p12')
-            storePassword 'gesthote'
-            keyAlias 'gesthote'
-            keyPassword 'gesthote'
+            storeFile file('signing.p12')
+            storePassword System.getenv('ANDROID_KEYSTORE_PASSWORD')
+            keyAlias 'app'
+            keyPassword System.getenv('ANDROID_KEYSTORE_PASSWORD')
             storeType 'PKCS12'
         }
     }
