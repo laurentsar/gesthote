@@ -98,7 +98,7 @@ async function initCloudSync() {
     // lire/écrire un document alors que l'authentification (simple HTTPS)
     // fonctionne. On force donc le long-polling, fiable dans une WebView.
     fbDb = firestoreMod.initializeFirestore(app, {
-      experimentalAutoDetectLongPolling: true,
+      experimentalForceLongPolling: true,
       useFetchStreams: false,
     });
     fbAuth = authMod.getAuth(app);
