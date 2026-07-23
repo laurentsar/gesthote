@@ -1,4 +1,4 @@
 {
-  "version": "1.8.13",
-  "notes": "Corrige l'accès à la base après connexion (erreur « unavailable ») : Firestore forcé en long-polling et suppression de CapacitorHttp qui bloquait la synchronisation cloud dans l'app Android."
+  "version": "1.8.14",
+  "notes": "Ménages : nouveau bouton « Ménage exceptionnel » pour enregistrer une intervention hors planning (intervenant, date, logement, durée) directement dans l'historique. Planning : le bouton « Aujourd'hui » recentre la colonne du jour au milieu de l'écran."
 }

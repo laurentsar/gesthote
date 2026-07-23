@@ -72,6 +72,9 @@ function load() {
 }
 function save() { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} pushCloud(); }
 const prop = id => S.properties.find(p => p.id === id);
+// Logement d'un ménage : le vrai logement si lié à un pid, sinon un logement
+// « libre » (ménage exceptionnel dont le nom est saisi à la main).
+const cleanProp = c => prop(c.pid) || { name: c.propName || 'Logement', emoji: '🧹', color: '#64748b' };
 
 // ---------- Synchronisation cloud (optionnelle, Firebase) ----------
 // Si window.FIREBASE_CONFIG est renseigné (voir index.html), les données sont
@@ -553,6 +556,17 @@ function openSheet(html) {
 }
 const closeSheet = () => document.querySelector('.sheet-bg')?.remove();
 
+// Recentre horizontalement la colonne du jour courant dans le planning.
+function centerTodayInPlanning() {
+  const scroller = document.querySelector('#app .planning-scroll');
+  if (!scroller) return;
+  const cell = scroller.querySelector('td.today, th.today');
+  if (!cell) return;
+  const sRect = scroller.getBoundingClientRect(), cRect = cell.getBoundingClientRect();
+  const delta = (cRect.left - sRect.left) - (scroller.clientWidth - cRect.width) / 2;
+  scroller.scrollTo({ left: Math.max(0, scroller.scrollLeft + delta), behavior: 'smooth' });
+}
+
 // Détail réservation + moteur de messages automatiques
 function sheetBooking(id) {
   if (!isAdmin()) { toast('⛔ Réservé à l\'administrateur'); return; }
@@ -661,7 +675,7 @@ function renderAutoTemplate(msgId, b) {
 function vCleaning() {
   const list = filtered(S.cleaning).filter(c => c.status !== 'done').sort((a,b) => a.date.localeCompare(b.date));
   const item = c => {
-    const b = booking(c.bookingId), p = prop(c.pid);
+    const b = booking(c.bookingId), p = cleanProp(c);
     const st = { done:['ok','Fait'], todo:['warn','À faire'], planned:['info','Planifié'] }[c.status];
     const nextIn = S.bookings.find(x => x.pid === c.pid && x.checkIn === c.date);
     return `<div class="row" style="align-items:flex-start;flex-wrap:wrap">
@@ -680,6 +694,7 @@ function vCleaning() {
   <div class="topbar"><h1>🧹 Ménages</h1></div>
   ${propSwitch()}
   <div class="small muted" style="margin-bottom:10px">Une intervention est créée à chaque départ. Choisissez qui s'en charge dans la liste, touchez le statut pour le faire avancer.</div>
+  <button class="btn block" data-clean-exceptional style="margin-bottom:10px">🧽 Ménage exceptionnel</button>
   <div class="card">${list.length ? list.map(item).join('') : '<div class="empty small">Rien à nettoyer</div>'}</div>
   ${isAdmin() ? `<button class="btn ghost block" data-manage-cleaners>⚙️ Gérer la liste des intervenants</button>` : ''}`;
 }
@@ -710,6 +725,37 @@ function sheetCleanDone(id) {
   `);
 }
 
+// Ménage exceptionnel : intervention hors planning, saisie manuelle, ajoutée
+// directement à l'historique (statut « done »).
+function sheetCleanExceptional() {
+  const halfField = 'margin-top:6px;padding:10px;border-radius:10px;background:var(--card2);color:var(--txt);border:1px solid var(--line);width:100%';
+  openSheet(`
+    <h2>🧽 Ménage exceptionnel</h2>
+    <div class="small muted" style="margin-bottom:10px">Enregistrer un ménage hors planning (non lié à un départ). Il apparaîtra dans l'historique des ménages.</div>
+    <div class="card">
+      <label class="small muted">Intervenant</label>
+      <input id="fx-cleaner" list="fx-cleaners" placeholder="Nom de l'intervenant" style="${FIELD}">
+      <datalist id="fx-cleaners">${S.cleaners.map(n => `<option value="${n}">`).join('')}</datalist>
+      <label class="small muted">Date</label>
+      <input id="fx-date" type="date" value="${D(0)}" style="${FIELD}">
+      <label class="small muted">Logement</label>
+      <input id="fx-prop" list="fx-props" placeholder="Nom du logement" style="${FIELD}">
+      <datalist id="fx-props">${S.properties.map(p => `<option value="${p.name}">`).join('')}</datalist>
+      <label class="small muted">Temps passé</label>
+      <div style="display:flex;gap:10px">
+        <div style="flex:1"><input id="fx-hours" type="number" inputmode="numeric" min="0" placeholder="Heures" style="${halfField}"></div>
+        <div style="flex:1"><select id="fx-minutes" style="${halfField}">
+          ${[0,10,20,30,40,50].map(m => `<option value="${m}">${m} min</option>`).join('')}
+        </select></div>
+      </div>
+    </div>
+    <div class="btn-row even" style="margin-top:4px">
+      <button class="btn ghost" data-clean-exc-cancel>Annuler</button>
+      <button class="btn" data-clean-exc-confirm>Valider</button>
+    </div>
+  `);
+}
+
 // Historique des ménages effectués : consultation, édition, filtres mois/intervenant
 let cleanHistoryFilter = { month: '', cleaner: 'all' };
 function sheetCleaningHistory() {
@@ -722,11 +768,11 @@ function sheetCleaningHistory() {
     ${[0,10,20,30,40,50].map(m => `<option value="${m}" ${(c.durationMin||0)%60===m?'selected':''}>${m} min</option>`).join('')}
   </select>`;
   const item = c => {
-    const p = prop(c.pid);
+    const p = cleanProp(c);
     return `<div class="card">
       <div class="row" style="border:0;padding:0 0 8px">
         <div class="avatar" style="background:${p.color}">${p.emoji}</div>
-        <div class="grow title small">${p.name}</div>
+        <div class="grow title small">${p.name}${c.exceptional ? ' <span class="badge info" style="font-size:10px">exceptionnel</span>' : ''}</div>
       </div>
       <label class="small muted">Date</label>
       <input type="date" data-hist-date="${c.id}" ${ro} value="${c.date}" style="${FIELD}">
@@ -1081,7 +1127,9 @@ function bindCommon(root) {
     save();
   });
   root.querySelectorAll('[data-plan-month]').forEach(el => el.onclick = () => {
-    const v = +el.dataset.planMonth; planMonthOffset = v === 0 ? 0 : planMonthOffset + v; render();
+    const v = +el.dataset.planMonth, goToday = v === 0;
+    planMonthOffset = goToday ? 0 : planMonthOffset + v; render();
+    if (goToday) requestAnimationFrame(centerTodayInPlanning);
   });
   root.querySelectorAll('[data-more]').forEach(el => el.onclick = () => {
     ({ cleanhist: sheetCleaningHistory, stats: sheetStats, settings: sheetSettings }[el.dataset.more])();
@@ -1114,6 +1162,26 @@ function bindCommon(root) {
     if (c.status === 'todo') { sheetCleanDone(c.id); return; }
     c.status = c.status === 'planned' ? 'todo' : 'planned';
     save(); render();
+  });
+  root.querySelectorAll('[data-clean-exceptional]').forEach(el => el.onclick = () => sheetCleanExceptional());
+  root.querySelectorAll('[data-clean-exc-cancel]').forEach(el => el.onclick = () => closeSheet());
+  root.querySelectorAll('[data-clean-exc-confirm]').forEach(el => el.onclick = () => {
+    const sg = document.querySelector('.sheet-bg');
+    const cleaner = sg.querySelector('#fx-cleaner').value.trim();
+    const date = sg.querySelector('#fx-date').value;
+    const propNameRaw = sg.querySelector('#fx-prop').value.trim();
+    const mins = (+sg.querySelector('#fx-hours').value || 0) * 60 + (+sg.querySelector('#fx-minutes').value || 0);
+    if (!cleaner || !date || !propNameRaw) { toast('⛔ Renseignez intervenant, date et logement'); return; }
+    const match = S.properties.find(p => p.name.toLowerCase() === propNameRaw.toLowerCase());
+    if (!S.cleaners.includes(cleaner)) S.cleaners.push(cleaner);
+    S.cleaning.push({
+      id: 'cx' + Date.now().toString(36), pid: match ? match.id : null,
+      propName: match ? undefined : propNameRaw, date, bookingId: null, cleaner,
+      comment: '', towels: 0, sheetPairs: 0, durationMin: mins, status: 'done', exceptional: true
+    });
+    save(); closeSheet();
+    toast(`✅ Ménage exceptionnel enregistré — ${Math.floor(mins/60)}h${String(mins%60).padStart(2,'0')}`);
+    render(); sheetCleaningHistory();
   });
   root.querySelectorAll('[data-clean-done-cancel]').forEach(el => el.onclick = () => { closeSheet(); render(); });
   root.querySelectorAll('[data-clean-done-confirm]').forEach(el => el.onclick = () => {
