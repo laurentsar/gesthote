@@ -113,3 +113,11 @@ jobs:
           fail_on_unmatched_files: true
           generate_release_notes: true
 
+      - name: Publish web app to GitHub Pages (gesthote-releases) — pour installation sur iPhone (PWA)
+        if: (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main') && env.RELEASE_PAT != ''
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          personal_token: ${{ secrets.RELEASE_PAT }}
+          external_repository: laurentsar/gesthote-releases
+          publish_branch: gh-pages
+          publish_dir: ./www
