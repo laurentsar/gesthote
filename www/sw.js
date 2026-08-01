@@ -1,5 +1,9 @@
-const CACHE = 'gesthote-v1.8.14';
-const ASSETS = ['/', '/index.html', '/app.js', '/style.css', '/manifest.webmanifest', '/update-check.js', 'autobackup.js', '/img/icon-flat.png', '/img/icon-192.png', '/img/icon-512.png'];
+const CACHE = 'gesthote-v1.8.15';
+// Chemins relatifs (pas de "/" en tête) : l'app peut être servie à la racine
+// d'une origine (WebView Android/Capacitor) ou dans un sous-dossier (site
+// GitHub Pages type github.io/<repo>/) — les chemins relatifs se résolvent
+// dans les deux cas par rapport à l'URL de ce script.
+const ASSETS = ['./', './index.html', './app.js', './style.css', './manifest.webmanifest', './update-check.js', './autobackup.js', './img/icon-flat.png', './img/icon-192.png', './img/icon-512.png'];
 
 self.addEventListener('install', e => {
   self.skipWaiting();
@@ -24,7 +28,7 @@ self.addEventListener('fetch', e => {
     return;
   }
   e.respondWith(
-    caches.match(e.request).then(r => r || fetch(e.request).catch(() => caches.match('/index.html')))
+    caches.match(e.request).then(r => r || fetch(e.request).catch(() => caches.match('./index.html')))
   );
 });
 
