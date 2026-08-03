@@ -6,7 +6,15 @@
 // ---------- Utilitaires date ----------
 const DAY = 86400000;
 const today0 = () => { const d = new Date(); d.setHours(0,0,0,0); return d; };
-const d = off => new Date(today0().getTime() + off * DAY);        // Date à J+off
+const d = off => {                                                 // Date à J+off
+  const t = today0();
+  // Construit la date via ses composants calendaires (année/mois/jour+off) et
+  // laisse le moteur JS gérer le débordement de mois/année : contrairement à
+  // "+ off*DAY" en millisecondes, ça reste exact même quand l'intervalle
+  // traverse un changement d'heure (le décalage d'1h autour du DST peut sinon
+  // faire glisser le résultat sur le jour calendaire précédent/suivant).
+  return new Date(t.getFullYear(), t.getMonth(), t.getDate() + off);
+};
 const iso = dt => {                                               // 'YYYY-MM-DD' (fuseau local)
   const x = new Date(dt);
   return `${x.getFullYear()}-${String(x.getMonth()+1).padStart(2,'0')}-${String(x.getDate()).padStart(2,'0')}`;

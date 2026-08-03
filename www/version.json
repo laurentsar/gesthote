@@ -1,4 +1,4 @@
 {
-  "version": "1.8.16",
-  "notes": "Le bouton pour supprimer une réservation est maintenant disponible aussi sur les séjours déjà terminés (auparavant, seules les réservations à venir ou en cours pouvaient être annulées)."
+  "version": "1.8.17",
+  "notes": "Corrige un bug de changement d'heure (heure d'été/hiver) qui décalait le Planning d'un jour et faisait disparaître les réservations en naviguant plusieurs mois en avance ou en arrière (ex. consulter décembre depuis août)."
 }
