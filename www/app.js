@@ -607,7 +607,7 @@ function sheetBooking(id) {
     </div>
 
     ${b.review==='pending' ? `<button class="btn block" style="margin-top:8px" data-review="${id}">⭐ Envoyer la demande d'avis</button>` : ''}
-    ${!past ? `<button class="btn ghost block" style="margin-top:8px" data-cancel="${id}">Annuler la réservation</button>` : ''}
+    <button class="btn danger block" style="margin-top:8px" data-cancel="${id}">${past ? 'Supprimer la réservation' : 'Annuler la réservation'}</button>
   `);
 }
 
@@ -1151,11 +1151,11 @@ function bindCommon(root) {
     closeSheet(); toast('⭐ Demande d\'avis envoyée'); render();
   });
   root.querySelectorAll('[data-cancel]').forEach(el => el.onclick = () => {
-    if (!confirm('Annuler cette réservation ?')) return;
+    if (!confirm('Supprimer définitivement cette réservation ?')) return;
     S.bookings = S.bookings.filter(b => b.id !== el.dataset.cancel);
     delete S.conversations[el.dataset.cancel];
     S.cleaning = S.cleaning.filter(c => c.bookingId !== el.dataset.cancel);
-    save(); closeSheet(); toast('Réservation annulée'); render();
+    save(); closeSheet(); toast('Réservation supprimée'); render();
   });
   root.querySelectorAll('[data-clean]').forEach(el => el.onclick = () => {
     const c = S.cleaning.find(x => x.id === el.dataset.clean);

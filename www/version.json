@@ -1,4 +1,4 @@
 {
-  "version": "1.8.15",
-  "notes": "Ajoute une version web installable (PWA) publiée sur GitHub Pages, pour utiliser GestHôte sur iPhone (Safari → Partager → Sur l'écran d'accueil) sans passer par l'App Store."
+  "version": "1.8.16",
+  "notes": "Le bouton pour supprimer une réservation est maintenant disponible aussi sur les séjours déjà terminés (auparavant, seules les réservations à venir ou en cours pouvaient être annulées)."
 }
