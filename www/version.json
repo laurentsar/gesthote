@@ -1,4 +1,4 @@
 {
-  "version": "1.8.17",
-  "notes": "Corrige un bug de changement d'heure (heure d'été/hiver) qui décalait le Planning d'un jour et faisait disparaître les réservations en naviguant plusieurs mois en avance ou en arrière (ex. consulter décembre depuis août)."
+  "version": "1.8.18",
+  "notes": "Ajoute une fenêtre « Nouveautés » qui s'affiche automatiquement à la première connexion après une mise à jour, pour voir d'un coup d'œil ce qui a changé."
 }

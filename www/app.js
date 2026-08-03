@@ -187,6 +187,7 @@ async function attemptCloudLogin() {
     resetIdleTimer();
     subscribeCloud();
     render();
+    checkWhatsNew();
   } catch (e) {
     if (msg) msg.textContent = `⛔ Connecté, mais accès à la base refusé (${e.code || e.message}). Vérifiez les règles Firestore.`;
   }
@@ -245,7 +246,7 @@ function renderLock() {
 }
 
 function attemptLogin(role) {
-  if (role === 'user') { currentRole = 'user'; resetIdleTimer(); render(); return; }
+  if (role === 'user') { currentRole = 'user'; resetIdleTimer(); render(); checkWhatsNew(); return; }
   const box = document.getElementById('lock-form');
   box.innerHTML = `
     <div style="display:flex;gap:8px;margin-top:6px">
@@ -264,7 +265,7 @@ function attemptLogin(role) {
   const input = box.querySelector('#admin-pass');
   input.focus();
   const submit = () => {
-    if (input.value === S.accounts.admin.password) { currentRole = 'admin'; resetIdleTimer(); render(); }
+    if (input.value === S.accounts.admin.password) { currentRole = 'admin'; resetIdleTimer(); render(); checkWhatsNew(); }
     else { document.getElementById('lock-msg').textContent = '⛔ Mot de passe incorrect.'; input.value = ''; input.focus(); }
   };
   box.querySelector('#admin-pass-go').onclick = submit;
@@ -292,6 +293,28 @@ function resetIdleTimer() {
 }
 ['click', 'keydown', 'touchstart', 'pointerdown'].forEach(evt =>
   document.addEventListener(evt, resetIdleTimer, { passive: true }));
+
+// ---------- Nouveautés (pop-up à la première connexion après une mise à jour) ----------
+const SEEN_VERSION_KEY = 'gesthote.seenVersion';
+function checkWhatsNew() {
+  const current = window.APP_VERSION;
+  const seen = (() => { try { return localStorage.getItem(SEEN_VERSION_KEY); } catch (e) { return null; } })();
+  if (!current || seen === current) return;
+  const markSeen = () => { try { localStorage.setItem(SEEN_VERSION_KEY, current); } catch (e) {} };
+  if (!seen) { markSeen(); return; }  // 1er lancement jamais vu : rien à annoncer
+  fetch('./version.json?_=' + Date.now())
+    .then(r => r.ok ? r.json() : null)
+    .then(v => {
+      markSeen();
+      if (!v || !v.notes) return;
+      openSheet(`
+        <h2>🎉 Nouveautés — v${current}</h2>
+        <div class="card"><p style="white-space:pre-wrap;margin:0">${v.notes.replace(/</g, '&lt;')}</p></div>
+        <button class="btn block" style="margin-top:10px" data-whatsnew-close>Compris</button>
+      `);
+    })
+    .catch(() => markSeen());
+}
 
 // ---------- Routeur ----------
 let TAB = 'home';
@@ -1192,6 +1215,7 @@ function bindCommon(root) {
     render(); sheetCleaningHistory();
   });
   root.querySelectorAll('[data-clean-done-cancel]').forEach(el => el.onclick = () => { closeSheet(); render(); });
+  root.querySelectorAll('[data-whatsnew-close]').forEach(el => el.onclick = closeSheet);
   root.querySelectorAll('[data-clean-done-confirm]').forEach(el => el.onclick = () => {
     const c = S.cleaning.find(x => x.id === el.dataset.cleanDoneConfirm);
     const sg = document.querySelector('.sheet-bg');
