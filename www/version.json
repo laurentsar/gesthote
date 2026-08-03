@@ -1,4 +1,4 @@
 {
-  "version": "1.8.18",
-  "notes": "Ajoute une fenêtre « Nouveautés » qui s'affiche automatiquement à la première connexion après une mise à jour, pour voir d'un coup d'œil ce qui a changé."
+  "version": "1.8.19",
+  "notes": "Corrige la version web (PWA) qui pouvait rester bloquée sur une ancienne version : le service worker sert désormais toujours le contenu le plus récent en priorité (réseau d'abord), le cache ne servant que de secours hors-ligne."
 }

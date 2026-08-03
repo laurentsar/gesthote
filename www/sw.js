@@ -1,4 +1,4 @@
-const CACHE = 'gesthote-v1.8.15';
+const CACHE = 'gesthote-v1.8.19';
 // Chemins relatifs (pas de "/" en tête) : l'app peut être servie à la racine
 // d'une origine (WebView Android/Capacitor) ou dans un sous-dossier (site
 // GitHub Pages type github.io/<repo>/) — les chemins relatifs se résolvent
@@ -27,8 +27,19 @@ self.addEventListener('fetch', e => {
     e.respondWith(fetch(e.request).catch(() => caches.match(e.request)));
     return;
   }
+  // Réseau d'abord, cache en secours (hors-ligne) : sert toujours le contenu
+  // le plus récent quand une connexion est disponible. Avec un cache-d'abord,
+  // tant que ce fichier sw.js ne change pas lui-même, le navigateur ne
+  // réinstalle jamais le service worker et sert indéfiniment le tout premier
+  // instantané mis en cache, quelle que soit la version réellement déployée.
   e.respondWith(
-    caches.match(e.request).then(r => r || fetch(e.request).catch(() => caches.match('./index.html')))
+    fetch(e.request)
+      .then(r => {
+        const copy = r.clone();
+        caches.open(CACHE).then(c => c.put(e.request, copy)).catch(() => {});
+        return r;
+      })
+      .catch(() => caches.match(e.request).then(r => r || caches.match('./index.html')))
   );
 });
 
