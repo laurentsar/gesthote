@@ -15,6 +15,10 @@
   var REPO = window.UPDATE_REPO;
   var CURRENT = window.APP_VERSION;
   if (!REPO || !CURRENT) return;
+  // Web/PWA (pas de Capacitor) : le service worker sert déjà toujours le
+  // contenu le plus récent (réseau d'abord), pas besoin de bannière — celle-ci
+  // ne proposerait de toute façon qu'un lien vers l'APK Android, inutile ici.
+  if (!window.Capacitor) return;
 
   var POLL_INTERVAL = 6 * 3600 * 1000; // 6 h
   var KEY_POLL = 'updPoll:' + REPO;
