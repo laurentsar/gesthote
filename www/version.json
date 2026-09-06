@@ -1,4 +1,4 @@
 {
-  "version": "1.8.21",
-  "notes": "Supprime la bannière « nouvelle version disponible » sur la version web (PWA) : elle ne proposait qu'un lien vers l'APK Android, inutile ici puisque la PWA se met déjà à jour automatiquement."
+  "version": "1.8.22",
+  "notes": "Ajoute la connexion par empreinte digitale (ou Face ID) : après une première connexion par mot de passe, une proposition d'activation apparaît. Une fois activée, un bouton « Se connecter par empreinte » remplace la saisie du mot de passe sur cet appareil."
 }

@@ -152,15 +152,21 @@ async function attemptCloudLogin() {
   const email = document.getElementById('login-email').value.trim();
   const password = document.getElementById('login-password').value;
   const msg = document.getElementById('lock-msg');
-  let cred;
   try {
-    cred = await fb.signInWithEmailAndPassword(fbAuth, email, password);
+    await fb.signInWithEmailAndPassword(fbAuth, email, password);
   } catch (e) {
     if (msg) msg.textContent = e.code === 'auth/network-request-failed'
       ? '⛔ Pas de connexion internet — réessayez.'
       : '⛔ Email ou mot de passe incorrect.';
     return;
   }
+  await afterCloudAuth(email, msg);
+  maybeOfferBiometric(email, password);
+}
+
+// Suite commune à une connexion réussie (via mot de passe ou empreinte) :
+// charge le document cloud, détermine le rôle, démarre la synchro.
+async function afterCloudAuth(email, msg) {
   try {
     const snap = await fb.getDoc(workspaceDocRef());
     let needsPush = !snap.exists();
@@ -206,6 +212,92 @@ const setLastEmail = email => { try { localStorage.setItem(LAST_EMAIL_KEY, email
 
 const pwToggleBtn = id => `<button type="button" class="btn ghost" data-pw-toggle="${id}" style="padding:0 16px" aria-label="Afficher le mot de passe">👁</button>`;
 
+// ---------- Connexion par empreinte digitale / Face ID (WebAuthn) ----------
+// Le mot de passe est stocké localement (jamais envoyé ailleurs) et protégé
+// par le capteur biométrique de l'appareil : navigator.credentials.get()
+// n'aboutit que si le capteur reconnaît le propriétaire de l'appareil, avant
+// quoi le mot de passe stocké n'est jamais relu ni utilisé.
+const BIOMETRIC_KEY = 'gesthote.biometric';
+const BIOMETRIC_DECLINED_KEY = 'gesthote.biometricDeclined';
+const getBiometricCred = () => {
+  try { const raw = localStorage.getItem(BIOMETRIC_KEY); return raw ? JSON.parse(raw) : null; }
+  catch (e) { return null; }
+};
+const saveBiometricCred = (credentialId, email, password) => {
+  try { localStorage.setItem(BIOMETRIC_KEY, JSON.stringify({ credentialId, email, password })); } catch (e) {}
+};
+const clearBiometricCred = () => { try { localStorage.removeItem(BIOMETRIC_KEY); } catch (e) {} };
+const biometricSupported = () => typeof window.PublicKeyCredential !== 'undefined' && !!navigator.credentials;
+const bufToBase64 = buf => btoa(String.fromCharCode(...new Uint8Array(buf)));
+const base64ToBuf = b64 => Uint8Array.from(atob(b64), c => c.charCodeAt(0)).buffer;
+
+async function enrollBiometric(email, password) {
+  try {
+    const cred = await navigator.credentials.create({
+      publicKey: {
+        rp: { name: 'GestHôte' },
+        user: { id: crypto.getRandomValues(new Uint8Array(16)), name: email, displayName: email },
+        challenge: crypto.getRandomValues(new Uint8Array(32)),
+        pubKeyCredParams: [{ type: 'public-key', alg: -7 }, { type: 'public-key', alg: -257 }],
+        authenticatorSelection: { authenticatorAttachment: 'platform', userVerification: 'required', residentKey: 'preferred' },
+        timeout: 60000,
+      }
+    });
+    saveBiometricCred(bufToBase64(cred.rawId), email, password);
+    toast('✅ Connexion par empreinte activée');
+    closeSheet();
+  } catch (e) {
+    toast('⛔ Activation impossible sur cet appareil');
+  }
+}
+
+// Propose l'activation une fois, après une connexion réussie par mot de
+// passe — tant que l'utilisateur ne l'a ni activée ni déclinée sur cet
+// appareil (pas de relance intempestive à chaque connexion).
+function maybeOfferBiometric(email, password) {
+  if (!biometricSupported() || getBiometricCred()) return;
+  try { if (localStorage.getItem(BIOMETRIC_DECLINED_KEY)) return; } catch (e) {}
+  const sheet = openSheet(`
+    <h2>👆 Connexion par empreinte</h2>
+    <div class="small muted" style="margin-bottom:14px">Activez la connexion par empreinte digitale (ou Face ID) sur cet appareil : vous n'aurez plus besoin de taper votre mot de passe.</div>
+    <button class="btn block" data-biometric-enroll>Activer</button>
+    <button class="btn ghost block" style="margin-top:8px" data-biometric-decline>Non merci</button>
+  `);
+  sheet.querySelector('[data-biometric-enroll]').onclick = () => enrollBiometric(email, password);
+  sheet.querySelector('[data-biometric-decline]').onclick = () => {
+    try { localStorage.setItem(BIOMETRIC_DECLINED_KEY, '1'); } catch (e) {}
+    closeSheet();
+  };
+}
+
+async function loginWithBiometric() {
+  const cred = getBiometricCred();
+  if (!cred) return;
+  const msg = document.getElementById('lock-msg');
+  try {
+    await navigator.credentials.get({
+      publicKey: {
+        challenge: crypto.getRandomValues(new Uint8Array(32)),
+        allowCredentials: [{ id: base64ToBuf(cred.credentialId), type: 'public-key' }],
+        userVerification: 'required',
+        timeout: 60000,
+      }
+    });
+  } catch (e) {
+    toast('⛔ Empreinte non reconnue');
+    return;
+  }
+  try {
+    await fb.signInWithEmailAndPassword(fbAuth, cred.email, cred.password);
+  } catch (e) {
+    toast('⛔ Connexion impossible — reconnectez-vous avec le mot de passe');
+    clearBiometricCred();
+    renderLock();
+    return;
+  }
+  await afterCloudAuth(cred.email, msg);
+}
+
 function renderLock() {
   if (typeof checkForUpdate === 'function') checkForUpdate();
   app.innerHTML = `
@@ -214,6 +306,9 @@ function renderLock() {
       <div><h1 style="margin:0 0 4px">GestHôte</h1><div class="small muted">${cloudMode ? 'Connectez-vous' : 'Choisissez votre compte'}</div></div>
       ${cloudMode ? `
       <div style="width:100%;max-width:320px">
+        ${getBiometricCred() ? `
+        <button class="btn block" id="biometric-login-go" style="margin-bottom:14px">👆 Se connecter par empreinte</button>
+        <div class="small muted" style="margin-bottom:14px">ou avec votre mot de passe :</div>` : ''}
         <input id="login-email" type="email" placeholder="Email" autofocus value="${lastEmail()}"
           style="width:100%;padding:11px;border-radius:10px;background:var(--card2);color:var(--txt);border:1px solid var(--line);text-align:center">
         <div style="display:flex;gap:8px;margin-top:10px">
@@ -223,6 +318,7 @@ function renderLock() {
         </div>
         <button class="btn block" id="cloud-login-go" style="margin-top:10px">Se connecter</button>
         <div id="lock-msg" class="small muted" style="margin-top:8px"></div>
+        ${getBiometricCred() ? `<button type="button" id="biometric-forget" class="small muted" style="margin-top:12px;background:none;border:0;text-decoration:underline;cursor:pointer">Oublier l'empreinte sur cet appareil</button>` : ''}
       </div>` : `
       <div style="display:flex;flex-direction:column;gap:12px;width:100%;max-width:320px">
         <button class="btn block" data-login="admin">👤 ${S.accounts.admin.name}</button>
@@ -240,6 +336,10 @@ function renderLock() {
     const submit = () => attemptCloudLogin();
     document.getElementById('cloud-login-go').onclick = submit;
     document.getElementById('login-password').addEventListener('keydown', e => { if (e.key === 'Enter') submit(); });
+    const bioBtn = document.getElementById('biometric-login-go');
+    if (bioBtn) bioBtn.onclick = loginWithBiometric;
+    const forgetBtn = document.getElementById('biometric-forget');
+    if (forgetBtn) forgetBtn.onclick = () => { clearBiometricCred(); renderLock(); };
   } else {
     app.querySelectorAll('[data-login]').forEach(el => el.onclick = () => attemptLogin(el.dataset.login));
   }
