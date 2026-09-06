@@ -1,4 +1,4 @@
 {
-  "version": "1.8.19",
-  "notes": "Corrige la version web (PWA) qui pouvait rester bloquée sur une ancienne version : le service worker sert désormais toujours le contenu le plus récent en priorité (réseau d'abord), le cache ne servant que de secours hors-ligne."
+  "version": "1.8.20",
+  "notes": "Ménage : désormais planifié au début du séjour (avant l'arrivée) plutôt qu'à la fin. Dans le Planning, l'initiale de l'intervenant apparaît au début de la barre de réservation. Le commentaire de la réservation s'affiche aussi dans la fiche du ménage correspondant."
 }
