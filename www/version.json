@@ -1,4 +1,4 @@
 {
-  "version": "1.8.22",
-  "notes": "Ajoute la connexion par empreinte digitale (ou Face ID) : après une première connexion par mot de passe, une proposition d'activation apparaît. Une fois activée, un bouton « Se connecter par empreinte » remplace la saisie du mot de passe sur cet appareil."
+  "version": "1.8.23",
+  "notes": "Corrige les dates de ménage déjà enregistrées avant le passage « ménage au début du séjour » (v1.8.20) : elles pointaient encore vers la date de départ au lieu de la date d'arrivée. Recalées automatiquement au démarrage (sauf ménages déjà marqués faits, pour ne pas fausser l'historique)."
 }

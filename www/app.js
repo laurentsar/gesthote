@@ -75,6 +75,15 @@ function load() {
   if (S.accounts.admin.email === undefined) { S.accounts.admin.email = ''; save(); }
   if (!S.cleaningPrices) { S.cleaningPrices = seed().cleaningPrices; save(); }
   let changed = false;
+  // Migration : les ménages créés avant le passage « ménage au début du
+  // séjour » (v1.8.20) portaient encore la date de départ (checkOut). On les
+  // recale sur la date d'arrivée (checkIn) de leur réservation — sauf ceux
+  // déjà marqués « fait », pour ne pas fausser l'historique déjà enregistré.
+  S.cleaning.forEach(c => {
+    if (c.status === 'done' || !c.bookingId) return;
+    const b = booking(c.bookingId);
+    if (b && c.date !== b.checkIn) { c.date = b.checkIn; changed = true; }
+  });
   S.cleaning.forEach(c => { if (c.status === 'planned' && c.date <= D(0)) { c.status = 'todo'; changed = true; } });
   if (changed) save();
 }
