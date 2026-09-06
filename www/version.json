@@ -1,4 +1,4 @@
 {
-  "version": "1.8.20",
-  "notes": "Ménage : désormais planifié au début du séjour (avant l'arrivée) plutôt qu'à la fin. Dans le Planning, l'initiale de l'intervenant apparaît au début de la barre de réservation. Le commentaire de la réservation s'affiche aussi dans la fiche du ménage correspondant."
+  "version": "1.8.21",
+  "notes": "Supprime la bannière « nouvelle version disponible » sur la version web (PWA) : elle ne proposait qu'un lien vers l'APK Android, inutile ici puisque la PWA se met déjà à jour automatiquement."
 }
