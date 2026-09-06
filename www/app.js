@@ -708,11 +708,12 @@ function vCleaning() {
   const item = c => {
     const b = booking(c.bookingId), p = cleanProp(c);
     const st = { done:['ok','Fait'], todo:['warn','À faire'], planned:['info','Planifié'] }[c.status];
-    const nextIn = S.bookings.find(x => x.pid === c.pid && x.checkIn === c.date);
+    const prevOut = S.bookings.find(x => x.pid === c.pid && x.id !== c.bookingId && x.checkOut === c.date);
     return `<div class="row" style="align-items:flex-start;flex-wrap:wrap">
       <div class="avatar" style="background:${p.color}">${p.emoji}</div>
       <div class="grow"><div class="title small">${p.name}</div>
-        <div class="tiny muted">${fmtDateJ(c.date)}${nextIn?` · arrivée ${nextIn.guest.split(' ')[0]} même jour`:''}</div>
+        <div class="tiny muted">${fmtDateJ(c.date)} · pour l'arrivée de ${b.guest.split(' ')[0]}${prevOut?` · départ ${prevOut.guest.split(' ')[0]} même jour`:''}</div>
+        ${b.note ? `<div class="tiny" style="margin-top:4px;padding:6px 8px;border-radius:8px;background:var(--card2)">📝 Commentaire réservation : ${b.note}</div>` : ''}
         <select data-clean-assign="${c.id}" ${isAdmin() ? '' : 'disabled'} style="margin-top:6px;padding:6px 8px;border-radius:8px;background:var(--card2);color:var(--txt);border:1px solid var(--line);font-size:12px">
           <option value="">— Qui fait le ménage ? —</option>
           ${S.cleaners.map(name => `<option value="${name}" ${c.cleaner===name?'selected':''}>${name}</option>`).join('')}
@@ -724,7 +725,7 @@ function vCleaning() {
   return `
   <div class="topbar"><h1>🧹 Ménages</h1></div>
   ${propSwitch()}
-  <div class="small muted" style="margin-bottom:10px">Une intervention est créée à chaque départ. Choisissez qui s'en charge dans la liste, touchez le statut pour le faire avancer.</div>
+  <div class="small muted" style="margin-bottom:10px">Une intervention est créée à chaque arrivée (ménage à faire avant l'arrivée du voyageur). Choisissez qui s'en charge dans la liste, touchez le statut pour le faire avancer.</div>
   <button class="btn block" data-clean-exceptional style="margin-bottom:10px">🧽 Ménage exceptionnel</button>
   <div class="card">${list.length ? list.map(item).join('') : '<div class="empty small">Rien à nettoyer</div>'}</div>
   ${isAdmin() ? `<button class="btn ghost block" data-manage-cleaners>⚙️ Gérer la liste des intervenants</button>` : ''}`;
@@ -1128,8 +1129,8 @@ function saveAdd(sg) {
   const newBooking = { id, pid, plat, guest: g, checkIn: inIso, checkOut: outIso, nights, guests,
     amount: amountRaw !== '' ? +amountRaw || 0 : p.base * nights, avatarColor: '#14b8a6', review: null, note };
   S.bookings.push(newBooking);
-  S.cleaning.push({ id: 'c' + id, pid, date: outIso, bookingId: id, cleaner: '', comment: '',
-    status: outIso < D(0) ? 'done' : outIso === D(0) ? 'todo' : 'planned' });
+  S.cleaning.push({ id: 'c' + id, pid, date: inIso, bookingId: id, cleaner: '', comment: '',
+    status: inIso < D(0) ? 'done' : inIso === D(0) ? 'todo' : 'planned' });
   const confirmText = renderAutoTemplate('reservation', newBooking);
   S.conversations[id] = { unread: 0, msgs: confirmText ? [
     { from:'host', text: confirmText, at:`${D(0)} 12:00`, isAuto:true }
@@ -1295,7 +1296,7 @@ function bindCommon(root) {
       }
       b.nights = Math.max(1, nightsBetween(b.checkIn, b.checkOut));
       const c = S.cleaning.find(x => x.bookingId === id);
-      if (c) { c.pid = b.pid; c.date = b.checkOut; }
+      if (c) { c.pid = b.pid; c.date = b.checkIn; }
       save(); closeSheet(); sheetBooking(id); return;
     }
     save();
