@@ -58,7 +58,7 @@ function seed() {
     cleaners: [],
     autoMessages: DEFAULT_AUTO_MESSAGES(),
     activePid: 'all',
-    accounts: { admin: { name: 'Admin', password: 'Pialou2023-', email: '' }, user: { name: 'Utilisateur' } },
+    accounts: { admin: { name: 'Admin', password: 'admin', email: '' }, user: { name: 'Utilisateur' } },
     cleaningPrices: { hourly: 0, towel: 0, sheetPair: 0 },
     v: 2,
   };
@@ -71,7 +71,7 @@ function load() {
   try { S = JSON.parse(localStorage.getItem(KEY)); } catch (e) { S = null; }
   if (!S || S.v !== 2) { S = seed(); save(); }
   if (!S.accounts) { S.accounts = seed().accounts; save(); }
-  if (S.accounts.admin.password === undefined) { S.accounts.admin.password = 'Pialou2023-'; save(); }
+  if (S.accounts.admin.password === undefined) { S.accounts.admin.password = 'admin'; save(); }
   if (S.accounts.admin.email === undefined) { S.accounts.admin.email = ''; save(); }
   if (!S.cleaningPrices) { S.cleaningPrices = seed().cleaningPrices; save(); }
   let changed = false;
