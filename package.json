@@ -1,13 +1,16 @@
 {
   "name": "gesthote-app",
-  "version": "1.8.14",
+  "version": "1.8.15",
   "private": true,
   "description": "Gestion de locations courte durée (PMS + channel manager) — style Superhote",
-  "scripts": { "sync": "cap sync android", "open": "cap open android" },
+  "scripts": {
+    "sync": "cap sync android",
+    "open": "cap open android"
+  },
   "dependencies": {
-    "@capacitor/android": "^6.2.1",
-    "@capacitor/cli": "^6.2.1",
-    "@capacitor/core": "^6.2.1",
-    "@capacitor/preferences": "^6.0.3"
+    "@capacitor/android": "^8.0.0",
+    "@capacitor/cli": "^8.0.0",
+    "@capacitor/core": "^8.0.0",
+    "@capacitor/preferences": "^8.0.0"
   }
 }

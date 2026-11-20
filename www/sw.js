@@ -1,4 +1,4 @@
-const CACHE = 'gesthote-v1.8.19';
+const CACHE = 'gesthote-v1.8.15';
 // Chemins relatifs (pas de "/" en tête) : l'app peut être servie à la racine
 // d'une origine (WebView Android/Capacitor) ou dans un sous-dossier (site
 // GitHub Pages type github.io/<repo>/) — les chemins relatifs se résolvent
