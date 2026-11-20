@@ -1,4 +1,4 @@
 {
-  "version": "1.8.15",
+  "version": "1.8.24",
   "notes": "Corrige les dates de ménage déjà enregistrées avant le passage « ménage au début du séjour » (v1.8.20) : elles pointaient encore vers la date de départ au lieu de la date d'arrivée. Recalées automatiquement au démarrage (sauf ménages déjà marqués faits, pour ne pas fausser l'historique)."
 }
